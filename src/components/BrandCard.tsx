@@ -7,6 +7,15 @@ interface BrandCardProps {
   onClick: () => void;
 }
 
+const CATEGORY_LABEL: Record<string, string> = {
+  clothing: "Clothing",
+  "local-service": "Local Service",
+  "home-bakery": "Home Bakery",
+  cafe: "Cafe",
+  photography: "Photography",
+  others: "Others",
+};
+
 const BrandCard = ({ brand, index, onClick }: BrandCardProps) => {
   const primaryLocation = brand.Locations[0];
   const locationLabel = [primaryLocation?.city, primaryLocation?.state]
@@ -18,71 +27,81 @@ const BrandCard = ({ brand, index, onClick }: BrandCardProps) => {
   const productTypes = [
     ...new Set(brand.Products.map((p) => p.product_type).filter(Boolean)),
   ] as string[];
+  const categoryLabel = brand.brand_category
+    ? CATEGORY_LABEL[brand.brand_category] ?? brand.brand_category
+    : null;
 
   return (
     <button
       onClick={onClick}
-      className="group text-left w-full rounded-2xl bg-card border border-border hover:border-accent/50 hover:shadow-xl transition-all duration-300 overflow-hidden animate-fade-in-up"
-      style={{ animationDelay: `${index * 0.06}s` }}
+      className="group text-left w-full flex flex-col rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all duration-200 overflow-hidden animate-fade-in-up"
+      style={{ animationDelay: `${index * 0.05}s` }}
     >
-      {/* Color accent bar */}
-      <div className="h-2 bg-primary" />
+      {/* Top stripe */}
+      <div className="h-1 w-full bg-primary shrink-0" />
 
-      <div className="p-5">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <h3 className="font-display text-lg font-bold group-hover:text-accent transition-colors">
+      <div className="flex flex-col flex-1 p-4 gap-3">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="font-display text-base font-semibold leading-tight group-hover:text-primary transition-colors truncate">
               {brand.brand_name}
             </h3>
-            {locationLabel && (
-              <div className="flex items-center gap-1 text-muted-foreground text-sm mt-0.5">
-                <MapPin className="w-3 h-3" />
-                {locationLabel}
+            {locationLabel ? (
+              <div className="flex items-center gap-1 text-muted-foreground text-xs mt-0.5">
+                <MapPin className="w-3 h-3 shrink-0" />
+                <span className="truncate">{locationLabel}</span>
               </div>
-            )}
+            ) : hasOnline ? (
+              <span className="text-xs text-muted-foreground mt-0.5">Online only</span>
+            ) : null}
           </div>
-          {brand.Locations.length > 1 && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground font-medium shrink-0">
-              {brand.Locations.length} lokasi
+          {categoryLabel && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0 whitespace-nowrap">
+              {categoryLabel}
             </span>
           )}
         </div>
 
-        {/* Description */}
-        <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-          {brand.brand_description || "—"}
+        {/* Description — fixed 2 lines so cards stay same height */}
+        <p className="text-xs text-muted-foreground line-clamp-2 flex-1 leading-relaxed">
+          {brand.brand_description || "Tiada deskripsi."}
         </p>
 
-        {/* Product type tags */}
+        {/* Product tags */}
         {productTypes.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-3">
+          <div className="flex flex-wrap gap-1">
             {productTypes.slice(0, 3).map((tag) => (
               <span
                 key={tag}
-                className="text-xs px-2 py-0.5 rounded-full bg-tag text-tag-foreground font-medium"
+                className="text-[11px] px-2 py-0.5 rounded-full bg-tag text-tag-foreground font-medium"
               >
-                #{tag}
+                {tag}
               </span>
             ))}
+            {productTypes.length > 3 && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                +{productTypes.length - 3}
+              </span>
+            )}
           </div>
         )}
 
         {/* Footer badges */}
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          {hasOnline && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 font-medium">
-              🌐 Online
+        <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-border/60">
+          {hasPhysical && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted-foreground">
+              Physical
             </span>
           )}
-          {hasPhysical && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-tag text-tag-foreground font-medium">
-              🏪 Fizikal
+          {hasOnline && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted-foreground">
+              Online
             </span>
           )}
           {isMuslimFriendly && (
-            <span className="text-xs text-primary font-medium">
-              ☪ Muslim-Friendly
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-primary/30 text-primary">
+              Muslim-Friendly
             </span>
           )}
         </div>

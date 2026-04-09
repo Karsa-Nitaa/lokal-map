@@ -21,38 +21,103 @@ const InfoRow = ({
   children: React.ReactNode;
 }) => (
   <div className="flex gap-3">
-    <div className="w-8 h-8 rounded-lg bg-tag flex items-center justify-center text-tag-foreground shrink-0">
-      {icon}
-    </div>
-    <div className="flex-1">
-      <p className="text-xs text-muted-foreground font-medium mb-0.5">{label}</p>
+    <div className="mt-0.5 shrink-0 text-muted-foreground">{icon}</div>
+    <div className="flex-1 min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">{label}</p>
       {children}
     </div>
   </div>
 );
 
-// One-line compact operating hours
-function OperationHours({ hours }: { hours: Record<string, string> | null }) {
-  if (!hours || Object.keys(hours).length === 0) {
-    return <p className="text-sm text-muted-foreground">—</p>;
+// ── Smart Operation Hours ─────────────────────────────────────────────────────
+// Groups consecutive days with the same hours, e.g. "Tue – Sun  10:00 AM – 6:00 PM"
+
+const DAY_SHORT: Record<string, string> = {
+  monday: "Mon",
+  tuesday: "Tue",
+  wednesday: "Wed",
+  thursday: "Thu",
+  friday: "Fri",
+  saturday: "Sat",
+  sunday: "Sun",
+};
+
+function groupHours(hours: Record<string, string>): { label: string; value: string }[] {
+  const days = DAYS_OF_WEEK.filter((d) => hours[d]);
+  if (days.length === 0) return [];
+
+  const groups: { label: string; value: string }[] = [];
+  let groupStart = days[0];
+  let groupEnd = days[0];
+  let groupValue = hours[days[0]];
+
+  for (let i = 1; i < days.length; i++) {
+    const day = days[i];
+    const prevDay = days[i - 1];
+    // Check if consecutive in the week
+    const prevIdx = DAYS_OF_WEEK.indexOf(prevDay);
+    const curIdx = DAYS_OF_WEEK.indexOf(day);
+    if (curIdx === prevIdx + 1 && hours[day] === groupValue) {
+      groupEnd = day;
+    } else {
+      // Flush current group
+      const label =
+        groupStart === groupEnd
+          ? DAY_SHORT[groupStart]
+          : `${DAY_SHORT[groupStart]} – ${DAY_SHORT[groupEnd]}`;
+      groups.push({ label, value: groupValue });
+      groupStart = day;
+      groupEnd = day;
+      groupValue = hours[day];
+    }
   }
-  const entries = DAYS_OF_WEEK.filter((d) => hours[d]);
+  // Flush last group
+  const label =
+    groupStart === groupEnd
+      ? DAY_SHORT[groupStart]
+      : `${DAY_SHORT[groupStart]} – ${DAY_SHORT[groupEnd]}`;
+  groups.push({ label, value: groupValue });
+
+  return groups;
+}
+
+function OperationHours({ hours }: { hours: Record<string, string> | null }) {
+  if (!hours) return <p className="text-xs text-muted-foreground">—</p>;
+
+  // Build a full row for all 7 days (mark missing as "Tutup")
+  const allDays = DAYS_OF_WEEK.map((d) => ({ day: d, value: hours[d] || null }));
+  const hasAny = allDays.some((d) => d.value);
+  if (!hasAny) return <p className="text-xs text-muted-foreground">—</p>;
+
+  // Group open days
+  const openHours: Record<string, string> = {};
+  allDays.forEach(({ day, value }) => { if (value) openHours[day] = value; });
+  const openGroups = groupHours(openHours);
+
+  // Closed days (individually)
+  const closedDays = allDays.filter((d) => !d.value).map((d) => DAY_SHORT[d.day]);
+
   return (
-    <p className="text-sm text-muted-foreground leading-relaxed">
-      {entries.map((day, i) => (
-        <span key={day}>
-          <span className="font-medium capitalize text-foreground/80">{day.slice(0, 3)}</span>{" "}
-          {hours[day]}
-          {i < entries.length - 1 ? " · " : ""}
-        </span>
+    <div className="space-y-1">
+      {openGroups.map((g) => (
+        <div key={g.label} className="flex gap-2 text-xs">
+          <span className="w-20 shrink-0 text-muted-foreground">{g.label}</span>
+          <span className="font-medium">{g.value}</span>
+        </div>
       ))}
-    </p>
+      {closedDays.length > 0 && (
+        <div className="flex gap-2 text-xs">
+          <span className="w-20 shrink-0 text-muted-foreground">{closedDays.join(", ")}</span>
+          <span className="text-muted-foreground/70">Tutup</span>
+        </div>
+      )}
+    </div>
   );
 }
 
 // ── Location card ─────────────────────────────────────────────────────────────
 
-const LocationCard = ({ loc }: { loc: DBLocation }) => {
+const LocationCard = ({ loc, index }: { loc: DBLocation; index: number }) => {
   const address = [loc.lot_number, loc.street_address, loc.city, loc.postal_code, loc.state]
     .filter(Boolean)
     .join(", ");
@@ -61,16 +126,21 @@ const LocationCard = ({ loc }: { loc: DBLocation }) => {
     : [];
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
-      <InfoRow icon={<MapPin className="w-4 h-4" />} label="Alamat">
-        <p className="text-sm">{address || "—"}</p>
-        <div className="flex flex-wrap gap-2 mt-1.5">
+    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+      {/* Location number pill */}
+      {index > 0 && (
+        <div className="text-[11px] font-semibold text-muted-foreground">Lokasi {index + 1}</div>
+      )}
+
+      <InfoRow icon={<MapPin className="w-3.5 h-3.5" />} label="Alamat">
+        <p className="text-sm leading-snug">{address || "—"}</p>
+        <div className="flex flex-wrap gap-1.5 mt-2">
           {loc.googlemap_link && (
             <a
               href={loc.googlemap_link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
             >
               <Navigation className="w-3 h-3" /> Google Maps
             </a>
@@ -80,7 +150,7 @@ const LocationCard = ({ loc }: { loc: DBLocation }) => {
               href={loc.waze_link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 text-white text-xs font-medium hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 text-white text-xs font-medium hover:opacity-90 transition-opacity"
             >
               <Navigation className="w-3 h-3" /> Waze
             </a>
@@ -89,18 +159,18 @@ const LocationCard = ({ loc }: { loc: DBLocation }) => {
       </InfoRow>
 
       {loc.operation_hours && Object.keys(loc.operation_hours).length > 0 && (
-        <InfoRow icon={<Clock className="w-4 h-4" />} label="Waktu Operasi">
+        <InfoRow icon={<Clock className="w-3.5 h-3.5" />} label="Waktu Operasi">
           <OperationHours hours={loc.operation_hours} />
         </InfoRow>
       )}
 
       {loc.phone_number && (
-        <InfoRow icon={<Phone className="w-4 h-4" />} label="Hubungi">
+        <InfoRow icon={<Phone className="w-3.5 h-3.5" />} label="Hubungi">
           <a
             href={`https://wa.me/${loc.phone_number.replace(/\D/g, "")}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-600 text-white text-xs font-medium hover:opacity-90 transition-opacity"
           >
             <Phone className="w-3 h-3" /> WhatsApp
           </a>
@@ -108,16 +178,16 @@ const LocationCard = ({ loc }: { loc: DBLocation }) => {
       )}
 
       {loc.parking_remarks && (
-        <InfoRow icon={<Car className="w-4 h-4" />} label="Parking">
+        <InfoRow icon={<Car className="w-3.5 h-3.5" />} label="Parking">
           <p className="text-sm">{loc.parking_remarks}</p>
         </InfoRow>
       )}
 
       {paymentList.length > 0 && (
-        <InfoRow icon={<CreditCard className="w-4 h-4" />} label="Payment">
-          <div className="flex flex-wrap gap-1.5 mt-0.5">
+        <InfoRow icon={<CreditCard className="w-3.5 h-3.5" />} label="Bayaran">
+          <div className="flex flex-wrap gap-1 mt-0.5">
             {paymentList.map((m) => (
-              <span key={m} className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+              <span key={m} className="text-[11px] px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                 {m}
               </span>
             ))}
@@ -126,10 +196,10 @@ const LocationCard = ({ loc }: { loc: DBLocation }) => {
       )}
 
       {loc.is_muslim_friendly && (
-        <InfoRow icon={<ShieldCheck className="w-4 h-4" />} label="Muslim-Friendly">
-          <p className="text-sm text-primary font-medium">☪ Muslim-Friendly</p>
-          <p className="text-xs text-muted-foreground">
-            Pakaian menutup aurat, ada fitting room berasaingan, atau ciri-ciri bersesuaian dengan Muslim.
+        <InfoRow icon={<ShieldCheck className="w-3.5 h-3.5" />} label="Muslim-Friendly">
+          <p className="text-sm font-medium text-primary">Muslim-Friendly</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Pakaian menutup aurat, fitting room berasingan, atau ciri bersesuaian Muslim.
           </p>
         </InfoRow>
       )}
@@ -149,13 +219,24 @@ async function fetchBrand(id: number): Promise<BrandWithDetails | null> {
   return data as BrandWithDetails;
 }
 
-// ── Gender badge ──────────────────────────────────────────────────────────────
+// ── Social link row ───────────────────────────────────────────────────────────
 
-const GENDER_LABEL: Record<string, string> = {
-  lelaki: "👔 Lelaki",
-  perempuan: "👗 Perempuan",
-  unisex: "🤝 Unisex",
-};
+function SocialLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors group"
+    >
+      <LinkIcon className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] text-muted-foreground font-medium">{label}</p>
+        <p className="text-xs text-primary truncate">{href}</p>
+      </div>
+    </a>
+  );
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -172,18 +253,18 @@ const BrandDetailPage = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
   if (!brand) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <p className="text-xl font-display text-muted-foreground">Brand tidak dijumpai 😢</p>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-3">
+        <p className="font-semibold text-muted-foreground">Brand tidak dijumpai</p>
         <button
           onClick={() => navigate("/")}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
         >
           <ArrowLeft className="w-4 h-4" /> Balik ke Home
         </button>
@@ -193,7 +274,13 @@ const BrandDetailPage = () => {
 
   const isMuslimFriendly = brand.Locations.some((l) => l.is_muslim_friendly);
   const onlineData = brand.Online?.[0] ?? null;
-  const hasOnline = !!(onlineData?.website_link || onlineData?.instagram_link || onlineData?.tiktok_link || onlineData?.facebook_link || onlineData?.additional_link);
+  const hasOnline = !!(
+    onlineData?.website_link ||
+    onlineData?.instagram_link ||
+    onlineData?.tiktok_link ||
+    onlineData?.facebook_link ||
+    onlineData?.additional_link
+  );
 
   const lastUpdated = brand.Locations.reduce<string | null>((acc, l) => {
     if (!l.updated_at) return acc;
@@ -204,138 +291,122 @@ const BrandDetailPage = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Top bar */}
-      <div className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-md border-b border-border">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="w-9 h-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors"
+            className="w-8 h-8 rounded-lg border border-border flex items-center justify-center hover:bg-muted transition-colors shrink-0"
             aria-label="Back"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="flex-1 min-w-0">
-            <p className="font-display font-bold text-sm truncate">{brand.brand_name}</p>
-          </div>
+          <p className="font-semibold text-sm truncate flex-1">{brand.brand_name}</p>
+          {brand.brand_category && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0">
+              {brand.brand_category}
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
 
-        {/* ── Brand header ──────────────────────────────── */}
+        {/* ── Brand header ─────────────────────────────── */}
         <section>
-          <h1 className="font-display text-3xl md:text-4xl font-bold mb-2">{brand.brand_name}</h1>
+          <h1 className="font-display text-2xl md:text-3xl font-bold mb-1">{brand.brand_name}</h1>
 
           {brand.brand_description && (
-            <p className="text-muted-foreground leading-relaxed mb-4">{brand.brand_description}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-3">{brand.brand_description}</p>
           )}
 
+          {/* Tags row */}
           <div className="flex flex-wrap gap-1.5">
             {brand.Products.map((p) => p.product_type).filter(Boolean).map((type) => (
-              <span key={type} className="text-xs px-2.5 py-1 rounded-full bg-tag text-tag-foreground font-medium">
+              <span key={type} className="text-[11px] px-2.5 py-1 rounded-full bg-tag text-tag-foreground font-medium">
                 {type}
               </span>
             ))}
             {hasOnline && (
-              <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 font-medium">
-                🌐 Online
+              <span className="text-[11px] px-2.5 py-1 rounded-full border border-border text-muted-foreground font-medium">
+                Online
               </span>
             )}
             {brand.Locations.length > 0 && (
-              <span className="text-xs px-2.5 py-1 rounded-full bg-tag text-tag-foreground font-medium">
-                🏪 Fizikal
+              <span className="text-[11px] px-2.5 py-1 rounded-full border border-border text-muted-foreground font-medium">
+                Physical
               </span>
             )}
             {isMuslimFriendly && (
               <span
                 title="Pakaian menutup aurat, fitting room berasingan, atau ciri-ciri bersesuaian Muslim."
-                className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium cursor-help"
+                className="text-[11px] px-2.5 py-1 rounded-full border border-primary/40 text-primary font-medium cursor-help"
               >
-                ☪ Muslim-Friendly
+                Muslim-Friendly
               </span>
             )}
           </div>
         </section>
 
-        {/* ── Online Platforms ─────────────────────────── */}
+        {/* ── Online Platforms ──────────────────────────── */}
         {hasOnline && onlineData && (
           <section>
-            <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
-              <Globe className="w-5 h-5" /> Online
-            </h2>
-            <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
+            <SectionTitle icon={<Globe className="w-4 h-4" />} title="Online" />
+            <div className="grid sm:grid-cols-2 gap-2">
               {onlineData.website_link && (
-                <InfoRow icon={<Globe className="w-4 h-4" />} label="Website">
-                  <a href={onlineData.website_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
-                    {onlineData.website_link}
-                  </a>
-                </InfoRow>
+                <SocialLink href={onlineData.website_link} label="Website" />
               )}
               {onlineData.instagram_link && (
-                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Instagram">
-                  <a href={onlineData.instagram_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
-                    {onlineData.instagram_link}
-                  </a>
-                </InfoRow>
+                <SocialLink href={onlineData.instagram_link} label="Instagram" />
               )}
               {onlineData.tiktok_link && (
-                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="TikTok">
-                  <a href={onlineData.tiktok_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
-                    {onlineData.tiktok_link}
-                  </a>
-                </InfoRow>
+                <SocialLink href={onlineData.tiktok_link} label="TikTok" />
               )}
               {onlineData.facebook_link && (
-                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Facebook">
-                  <a href={onlineData.facebook_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
-                    {onlineData.facebook_link}
-                  </a>
-                </InfoRow>
+                <SocialLink href={onlineData.facebook_link} label="Facebook" />
               )}
               {onlineData.additional_link && (
-                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Lain-lain (Shopee dll.)">
-                  <a href={onlineData.additional_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
-                    {onlineData.additional_link}
-                  </a>
-                </InfoRow>
+                <SocialLink href={onlineData.additional_link} label="Shopee / Lain-lain" />
               )}
             </div>
           </section>
         )}
 
-        {/* ── Locations ─────────────────────────────────── */}
+        {/* ── Physical Locations ───────────────────────── */}
         {brand.Locations.length > 0 && (
           <section>
-            <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
-              <Store className="w-5 h-5" /> Lokasi Fizikal ({brand.Locations.length})
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {brand.Locations.map((loc) => (
-                <LocationCard key={loc.location_id} loc={loc} />
+            <SectionTitle
+              icon={<Store className="w-4 h-4" />}
+              title={`Lokasi Fizikal${brand.Locations.length > 1 ? ` (${brand.Locations.length})` : ""}`}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {brand.Locations.map((loc, i) => (
+                <LocationCard key={loc.location_id} loc={loc} index={i} />
               ))}
             </div>
           </section>
         )}
 
-        {/* ── Products ──────────────────────────────────── */}
+        {/* ── Products ─────────────────────────────────── */}
         {brand.Products.length > 0 && (
-          <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
-            <h2 className="font-display text-lg font-bold flex items-center gap-2">
-              <Package className="w-5 h-5" /> Produk
-            </h2>
-            <div className="space-y-3">
+          <section>
+            <SectionTitle icon={<Package className="w-4 h-4" />} title="Produk" />
+            <div className="rounded-xl border border-border bg-card p-4 space-y-2.5">
               {brand.Products.map((p) => (
-                <div key={p.product_id}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-sm">{p.product_type}</p>
-                    {p.product_gender && (
-                      <span className="text-[10px] uppercase font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                        {GENDER_LABEL[p.product_gender] ?? p.product_gender}
-                      </span>
+                <div key={p.product_id} className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-medium">{p.product_type}</span>
+                      {p.product_gender && (
+                        <span className="text-[10px] uppercase font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                          {p.product_gender}
+                        </span>
+                      )}
+                    </div>
+                    {p.product_description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{p.product_description}</p>
                     )}
                   </div>
-                  {p.product_description && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{p.product_description}</p>
-                  )}
                 </div>
               ))}
             </div>
@@ -344,38 +415,43 @@ const BrandDetailPage = () => {
 
         {/* Last updated */}
         {lastUpdated && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t border-border">
             <Calendar className="w-3.5 h-3.5" />
-            Maklumat dikemaskini: {new Date(lastUpdated).toLocaleDateString("ms-MY")}
+            Dikemaskini: {new Date(lastUpdated).toLocaleDateString("ms-MY")}
           </div>
         )}
 
-        {/* ── Reviews placeholder ──────────────────────── */}
+        {/* ── Reviews placeholder ───────────────────────── */}
         <section>
-          <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
-            <MessageSquarePlus className="w-5 h-5" /> Reviews
-          </h2>
-          <div className="rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto">
-              <Lock className="w-5 h-5 text-muted-foreground" />
-            </div>
-            <p className="font-display font-semibold text-foreground">Reviews Coming Soon</p>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              Nak elak spam dan review palsu — semua reviews akan diverifikasi sebelum publish.
+          <SectionTitle icon={<MessageSquarePlus className="w-4 h-4" />} title="Reviews" />
+          <div className="rounded-xl border-2 border-dashed border-border bg-muted/20 p-6 text-center">
+            <Lock className="w-4 h-4 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm font-semibold">Coming Soon</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+              Reviews akan diverifikasi sebelum dipublish bagi elak spam.
             </p>
           </div>
         </section>
-
       </div>
 
-      {/* Footer */}
-      <footer className="bg-primary text-primary-foreground py-6 mt-12">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <p className="text-primary-foreground/70 text-sm">© 2026 Lokal-Map</p>
+      <footer className="border-t border-border py-5 mt-6">
+        <div className="max-w-3xl mx-auto px-4 text-center">
+          <p className="text-xs text-muted-foreground">© 2026 Lokal-Map</p>
         </div>
       </footer>
     </div>
   );
 };
+
+// ── Section title helper ──────────────────────────────────────────────────────
+
+function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <div className="text-muted-foreground">{icon}</div>
+      <h2 className="font-display font-semibold text-base">{title}</h2>
+    </div>
+  );
+}
 
 export default BrandDetailPage;

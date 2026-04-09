@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, MapPin, Filter, X, Lock } from "lucide-react";
+import { Search, MapPin, SlidersHorizontal, X, Lock } from "lucide-react";
 import { CATEGORIES } from "@/data/brands";
 import type { Category } from "@/data/brands";
 import { supabase } from "@/lib/supabase";
@@ -23,7 +23,6 @@ const Index = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // ── Derive all UI state from URL params (persists across back-nav) ──────────
   const search = searchParams.get("search") || "";
   const selectedCategory = (searchParams.get("category") as Category) || null;
   const selectedState = searchParams.get("state") || "";
@@ -70,101 +69,80 @@ const Index = () => {
         (b.brand_name ?? "").toLowerCase().includes(q) ||
         (b.brand_description ?? "").toLowerCase().includes(q) ||
         b.Products.some((p) => (p.product_type ?? "").toLowerCase().includes(q));
-      const matchState =
-        !selectedState ||
-        b.Locations.some((l) => l.state === selectedState);
-      const matchMuslim =
-        !muslimFriendlyOnly ||
-        b.Locations.some((l) => l.is_muslim_friendly);
+      const matchState = !selectedState || b.Locations.some((l) => l.state === selectedState);
+      const matchMuslim = !muslimFriendlyOnly || b.Locations.some((l) => l.is_muslim_friendly);
       const matchGender =
         !selectedGender ||
-        b.Products.some(
-          (p) => p.product_gender === selectedGender || p.product_gender === "unisex"
-        );
+        b.Products.some((p) => p.product_gender === selectedGender || p.product_gender === "unisex");
       const matchStoreType =
         !storeType ||
-        (storeType === "online"
-          ? b.Online && b.Online.length > 0
-          : b.Locations && b.Locations.length > 0);
+        (storeType === "online" ? b.Online && b.Online.length > 0 : b.Locations && b.Locations.length > 0);
       return matchCategory && matchSearch && matchState && matchMuslim && matchGender && matchStoreType;
     });
   }, [selectedCategory, allBrands, search, selectedState, muslimFriendlyOnly, selectedGender, storeType]);
 
   const hasActiveFilters = !!selectedState || muslimFriendlyOnly || !!selectedGender || !!storeType;
   const activeFilterCount =
-    (selectedState ? 1 : 0) +
-    (muslimFriendlyOnly ? 1 : 0) +
-    (selectedGender ? 1 : 0) +
-    (storeType ? 1 : 0);
+    (selectedState ? 1 : 0) + (muslimFriendlyOnly ? 1 : 0) + (selectedGender ? 1 : 0) + (storeType ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <header className="relative h-[70vh] min-h-[500px] flex items-center justify-center overflow-hidden">
+      <header className="relative h-[55vh] min-h-[380px] flex items-center justify-center overflow-hidden">
         <img
           src={heroBanner}
-          alt="Malaysian local fashion brands"
+          alt="Malaysian local brands"
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-[hsl(var(--hero-overlay)/0.75)]" />
-
-        <div className="relative z-10 text-center px-4 max-w-3xl mx-auto">
-          <h1 className="font-display text-5xl md:text-7xl font-bold text-primary-foreground mb-4 animate-fade-in-up">
+        <div className="absolute inset-0 bg-[hsl(var(--hero-overlay)/0.72)]" />
+        <div className="relative z-10 text-center px-4 max-w-2xl mx-auto">
+          <h1 className="font-display text-4xl md:text-6xl font-bold text-primary-foreground mb-3 animate-fade-in-up">
             Lokal-Map
-            <span className="block text-accent text-3xl md:text-4xl mt-2">
-              Discover Local Brands
-            </span>
           </h1>
-          <p
-            className="text-lg md:text-xl text-primary-foreground/80 mb-8 animate-fade-in-up font-body"
-            style={{ animationDelay: "0.15s" }}
-          >
-            Your go-to directory untuk cari brand lokal Malaysia yang best.
+          <p className="text-sm md:text-base text-primary-foreground/75 mb-6 animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
+            Directory brand lokal Malaysia — pakaian, bakeri, kafe &amp; lebih.
           </p>
-          <div
-            className="relative max-w-xl mx-auto animate-fade-in-up"
-            style={{ animationDelay: "0.3s" }}
-          >
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <div className="relative max-w-md mx-auto animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Cari brand, produk, atau lokasi..."
+              placeholder="Cari brand atau produk..."
               value={search}
               onChange={(e) => updateParams({ search: e.target.value })}
-              className="w-full pl-12 pr-4 py-4 rounded-2xl bg-background/95 backdrop-blur-md border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent shadow-lg text-base"
+              className="w-full pl-10 pr-4 py-3 rounded-xl bg-background/95 backdrop-blur-md border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-md text-sm"
             />
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-12">
+      <main className="max-w-6xl mx-auto px-4 py-8">
         {/* Category picker */}
-        <section className="mb-10">
-          <h2 className="font-display text-xl font-bold mb-4">Pilih Kategori</h2>
-          <div className="flex flex-wrap gap-3">
+        <section className="mb-8">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Kategori</p>
+          <div className="flex flex-wrap gap-2">
             {CATEGORIES.map(({ id, label, emoji, available }) =>
               available ? (
                 <button
                   key={id}
                   onClick={() => handleCategorySelect(id)}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl border-2 font-medium text-sm transition-all ${
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
                     selectedCategory === id
-                      ? "border-accent bg-accent text-accent-foreground shadow-md"
-                      : "border-border bg-card hover:border-accent/60 hover:shadow-sm"
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-card hover:border-primary/50 hover:bg-muted/40"
                   }`}
                 >
-                  <span className="text-lg">{emoji}</span>
+                  <span className="text-base">{emoji}</span>
                   {label}
                 </button>
               ) : (
                 <div
                   key={id}
-                  className="flex items-center gap-2 px-5 py-3 rounded-2xl border-2 border-border/40 bg-muted/30 text-muted-foreground text-sm font-medium select-none cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border/40 bg-muted/20 text-muted-foreground/50 text-sm font-medium cursor-not-allowed select-none"
                 >
-                  <span className="text-lg opacity-40">{emoji}</span>
-                  <span className="opacity-60">{label}</span>
-                  <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/60 font-normal flex items-center gap-1">
-                    <Lock className="w-2.5 h-2.5" /> Coming Soon
+                  <span className="text-base opacity-30">{emoji}</span>
+                  {label}
+                  <span className="ml-auto flex items-center gap-0.5 text-[11px]">
+                    <Lock className="w-2.5 h-2.5" /> Soon
                   </span>
                 </div>
               )
@@ -174,133 +152,138 @@ const Index = () => {
 
         {selectedCategory ? (
           <>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <h2 className="font-display text-2xl font-bold">
-                  {filtered.length} Brand{filtered.length !== 1 ? "s" : ""}
-                </h2>
+            {/* Results header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">
+                  {isLoading ? "Loading..." : `${filtered.length} brand`}
+                </span>
                 {hasActiveFilters && (
                   <button
                     onClick={resetFilters}
-                    className="text-sm text-accent hover:underline flex items-center gap-1"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <X className="w-3 h-3" /> Clear filters
+                    <X className="w-3 h-3" /> Clear
                   </button>
                 )}
               </div>
               <button
                 onClick={() => updateParams({ filters: showFilters ? null : "true" })}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
                   showFilters || hasActiveFilters
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card border-border hover:border-primary/50"
                 }`}
               >
-                <Filter className="w-4 h-4" />
-                <span className="text-sm font-medium">Filter</span>
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Filter
                 {hasActiveFilters && (
-                  <span className="w-5 h-5 rounded-full bg-accent text-accent-foreground text-xs flex items-center justify-center font-bold">
+                  <span className="w-4 h-4 rounded-full bg-accent text-accent-foreground text-[10px] flex items-center justify-center font-bold">
                     {activeFilterCount}
                   </span>
                 )}
               </button>
             </div>
 
+            {/* Filter panel */}
             {showFilters && (
-              <div className="mb-8 p-6 rounded-2xl glass-card animate-fade-in space-y-5">
-                {/* Negeri */}
+              <div className="mb-6 p-4 rounded-xl border border-border bg-card/80 backdrop-blur-sm space-y-4">
+                {/* State */}
                 <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">Negeri / Area</h3>
-                  <div className="flex flex-wrap gap-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Negeri</p>
+                  <div className="flex flex-wrap gap-1.5">
                     {MALAYSIAN_STATES.map((s) => (
                       <button
                         key={s}
                         onClick={() => updateParams({ state: selectedState === s ? null : s })}
-                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1 ${
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                           selectedState === s
                             ? "bg-primary text-primary-foreground"
-                            : "bg-tag text-tag-foreground hover:bg-primary/10"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
                         }`}
                       >
-                        <MapPin className="w-3 h-3" />
+                        <MapPin className="w-2.5 h-2.5" />
                         {s}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Platform */}
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">Platform</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { value: "fizikal", label: "🏪 Fizikal sahaja" },
-                      { value: "online", label: "🌐 Online sahaja" },
-                    ].map(({ value, label }) => (
-                      <button
-                        key={value}
-                        onClick={() => updateParams({ storeType: storeType === value ? null : value })}
-                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                          storeType === value
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-tag text-tag-foreground hover:bg-primary/10"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                <div className="grid sm:grid-cols-3 gap-4">
+                  {/* Platform */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Platform</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { value: "fizikal", label: "Physical" },
+                        { value: "online", label: "Online" },
+                      ].map(({ value, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => updateParams({ storeType: storeType === value ? null : value })}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                            storeType === value
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Jantina */}
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">Jantina Produk</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { value: "lelaki", label: "👔 Lelaki" },
-                      { value: "perempuan", label: "👗 Perempuan" },
-                      { value: "unisex", label: "🤝 Unisex" },
-                    ].map(({ value, label }) => (
-                      <button
-                        key={value}
-                        onClick={() => updateParams({ gender: selectedGender === value ? null : value })}
-                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                          selectedGender === value
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-tag text-tag-foreground hover:bg-primary/10"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  {/* Gender */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Jantina</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { value: "lelaki", label: "Lelaki" },
+                        { value: "perempuan", label: "Perempuan" },
+                        { value: "unisex", label: "Unisex" },
+                      ].map(({ value, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => updateParams({ gender: selectedGender === value ? null : value })}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                            selectedGender === value
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Muslim Friendly */}
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">Lain-lain</h3>
-                  <button
-                    onClick={() => updateParams({ muslim: muslimFriendlyOnly ? null : "true" })}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      muslimFriendlyOnly
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-tag text-tag-foreground hover:bg-primary/10"
-                    }`}
-                  >
-                    ☪ Muslim-Friendly sahaja
-                  </button>
+                  {/* Muslim friendly */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Lain-lain</p>
+                    <button
+                      onClick={() => updateParams({ muslim: muslimFriendlyOnly ? null : "true" })}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        muslimFriendlyOnly
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      Muslim-Friendly
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* Brand grid */}
             {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="h-52 rounded-2xl bg-muted animate-pulse" />
+                  <div key={i} className="h-48 rounded-xl bg-muted animate-pulse" />
                 ))}
               </div>
             ) : filtered.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filtered.map((brand, i) => (
                   <BrandCard
                     key={brand.brand_id}
@@ -311,24 +294,22 @@ const Index = () => {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-20">
-                <p className="text-xl font-display text-muted-foreground">Tak jumpa brand 😢</p>
-                <p className="text-muted-foreground mt-2">
-                  Cuba tukar filter atau search keyword lain
-                </p>
+              <div className="text-center py-16 text-muted-foreground">
+                <p className="text-base font-medium">Tiada brand dijumpai</p>
+                <p className="text-sm mt-1">Cuba tukar filter atau keyword lain</p>
               </div>
             )}
           </>
         ) : (
-          <div className="text-center py-16 text-muted-foreground">
-            <p className="text-lg">👆 Pilih kategori dulu untuk tunjuk brand</p>
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="text-sm">Pilih kategori di atas untuk lihat brand</p>
           </div>
         )}
       </main>
 
-      <footer className="bg-primary text-primary-foreground py-6">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-primary-foreground/70 text-sm">© 2026 Lokal-Map</p>
+      <footer className="border-t border-border py-5 mt-8">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <p className="text-xs text-muted-foreground">© 2026 Lokal-Map</p>
         </div>
       </footer>
     </div>

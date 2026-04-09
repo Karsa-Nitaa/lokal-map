@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Plus, Pencil, Trash2, MapPin, Package, Globe,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -31,12 +31,12 @@ import { DAYS_OF_WEEK, MALAYSIAN_STATES } from "@/lib/database.types";
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
 const BRAND_CATEGORIES = [
-  { value: "clothing", label: "👗 Clothing" },
-  { value: "local-service", label: "🎨 Local Service" },
-  { value: "home-bakery", label: "🧁 Home Bakery" },
-  { value: "cafe", label: "☕ Cafe" },
-  { value: "photography", label: "📷 Photography" },
-  { value: "others", label: "✨ Others" },
+  { value: "clothing", label: "Clothing" },
+  { value: "local-service", label: "Local Service" },
+  { value: "home-bakery", label: "Home Bakery" },
+  { value: "cafe", label: "Cafe" },
+  { value: "photography", label: "Photography" },
+  { value: "others", label: "Others" },
 ] as const;
 
 const brandSchema = z.object({
@@ -74,7 +74,6 @@ const locationSchema = z.object({
   sunday: z.string().optional(),
 });
 type LocationForm = z.infer<typeof locationSchema>;
-
 
 const onlineSchema = z.object({
   facebook_link: safeUrl.optional(),
@@ -129,14 +128,45 @@ function formToOperationHours(data: LocationForm): Record<string, string> {
   return hours;
 }
 
+// ─── Reusable Field ──────────────────────────────────────────────────────────
+
+function Field({
+  label,
+  error,
+  children,
+  hint,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold">{label}</Label>
+      {children}
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+// ─── Section heading ─────────────────────────────────────────────────────────
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 py-1">
+      <div className="flex-1 h-px bg-border" />
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground px-2">{children}</p>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
+
 // ─── Location Dialog ──────────────────────────────────────────────────────────
 
 function LocationDialog({
-  open,
-  onClose,
-  onSave,
-  initial,
-  pending,
+  open, onClose, onSave, initial, pending,
 }: {
   open: boolean;
   onClose: () => void;
@@ -144,170 +174,147 @@ function LocationDialog({
   initial?: LocationForm;
   pending: boolean;
 }) {
+  const [showHours, setShowHours] = useState(false);
+
   const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
+    register, handleSubmit, reset, control,
     formState: { errors },
   } = useForm<LocationForm>({
     resolver: zodResolver(locationSchema),
     defaultValues: initial ?? { is_muslim_friendly: false },
   });
 
-  // Reset whenever dialog reopens with new initial values
   useEffect(() => {
     reset(initial ?? { is_muslim_friendly: false });
+    setShowHours(false);
   }, [open, initial, reset]);
-
-  const isMuslimFriendly = watch("is_muslim_friendly");
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="text-base">
             {initial ? "Edit Lokasi" : "Tambah Lokasi"}
           </DialogTitle>
         </DialogHeader>
 
-        <form id="location-form" onSubmit={handleSubmit(onSave)} className="space-y-4 py-2">
-          {/* Address */}
+        <form id="location-form" onSubmit={handleSubmit(onSave)} className="space-y-4">
+          <SectionHeading>Alamat</SectionHeading>
+
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>No. Lot (optional)</Label>
-              <Input {...register("lot_number")} placeholder="Lot 1-03" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Poskod (optional)</Label>
-              <Input {...register("postal_code")} placeholder="50350" />
-            </div>
+            <Field label="No. Lot (optional)">
+              <Input {...register("lot_number")} placeholder="Lot 1-03" className="h-9 text-sm" />
+            </Field>
+            <Field label="Poskod (optional)">
+              <Input {...register("postal_code")} placeholder="50350" className="h-9 text-sm" />
+            </Field>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Alamat Jalan *</Label>
-            <Input
-              {...register("street_address")}
-              placeholder="Jalan Telawi 1, Bangsar"
+          <Field label="Alamat Jalan *" error={errors.street_address?.message}>
+            <Input {...register("street_address")} placeholder="Jalan Telawi, Bangsar" className="h-9 text-sm" />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Bandar *" error={errors.city?.message}>
+              <Input {...register("city")} placeholder="Kuala Lumpur" className="h-9 text-sm" />
+            </Field>
+            <Field label="Negeri *" error={errors.state?.message}>
+              <Controller
+                control={control}
+                name="state"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Pilih negeri…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MALAYSIAN_STATES.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </Field>
+          </div>
+
+          <SectionHeading>Navigasi</SectionHeading>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Google Maps Link" error={errors.googlemap_link?.message}>
+              <Input {...register("googlemap_link")} placeholder="https://maps.google.com/…" className="h-9 text-sm" />
+            </Field>
+            <Field label="Waze Link" error={errors.waze_link?.message}>
+              <Input {...register("waze_link")} placeholder="https://waze.com/…" className="h-9 text-sm" />
+            </Field>
+          </div>
+
+          <SectionHeading>Kenalan & Bayaran</SectionHeading>
+
+          <Field label="No. Telefon / WhatsApp">
+            <Input {...register("phone_number")} placeholder="601x-xxxxxxxx" className="h-9 text-sm" />
+          </Field>
+
+          <Field label="Kaedah Bayaran" hint="Pisahkan dengan koma: Cash, Card, QR Pay">
+            <Input {...register("payment_methods")} placeholder="Cash, Card, QR Pay" className="h-9 text-sm" />
+          </Field>
+
+          <Field label="Maklumat Parking (optional)">
+            <Textarea {...register("parking_remarks")} rows={2} placeholder="Contoh: Free parking di belakang bangunan" className="text-sm" />
+          </Field>
+
+          <SectionHeading>Ciri Tambahan</SectionHeading>
+
+          <div className="flex items-center gap-3 rounded-lg border border-border p-3">
+            <Controller
+              control={control}
+              name="is_muslim_friendly"
+              render={({ field }) => (
+                <Switch
+                  checked={field.value ?? false}
+                  onCheckedChange={field.onChange}
+                  id="muslim-friendly"
+                />
+              )}
             />
-            {errors.street_address && (
-              <p className="text-xs text-destructive">{errors.street_address.message}</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Bandar *</Label>
-              <Input {...register("city")} placeholder="Kuala Lumpur" />
-              {errors.city && (
-                <p className="text-xs text-destructive">{errors.city.message}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Negeri *</Label>
-              <Select
-                value={watch("state")}
-                onValueChange={(v) => setValue("state", v, { shouldValidate: true })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih negeri…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MALAYSIAN_STATES.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.state && (
-                <p className="text-xs text-destructive">{errors.state.message}</p>
-              )}
+            <div>
+              <Label htmlFor="muslim-friendly" className="cursor-pointer text-sm font-medium">Muslim-Friendly</Label>
+              <p className="text-[11px] text-muted-foreground">Fitting room berasingan, pakaian menutup aurat dsb.</p>
             </div>
           </div>
 
-          {/* Navigation links */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Google Maps Link (optional)</Label>
-              <Input {...register("googlemap_link")} placeholder="https://maps.google.com/…" />
-              {errors.googlemap_link && (
-                <p className="text-xs text-destructive">{errors.googlemap_link.message}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Waze Link (optional)</Label>
-              <Input {...register("waze_link")} placeholder="https://waze.com/…" />
-              {errors.waze_link && (
-                <p className="text-xs text-destructive">{errors.waze_link.message}</p>
-              )}
-            </div>
-          </div>
+          {/* Hours toggle */}
+          <button
+            type="button"
+            onClick={() => setShowHours((v) => !v)}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
+          >
+            {showHours ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <span className="font-medium">Waktu Operasi</span>
+            <span className="text-[11px] text-muted-foreground/60">(optional)</span>
+          </button>
 
-          {/* Coordinates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Latitude (optional)</Label>
-              <Input {...register("latitude")} placeholder="3.1234" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Longitude (optional)</Label>
-              <Input {...register("longitude")} placeholder="101.6789" />
-            </div>
-          </div>
-
-          {/* Contact & payment */}
-          <div className="space-y-1.5">
-            <Label>No. Telefon / WhatsApp (optional)</Label>
-            <Input {...register("phone_number")} placeholder="601x-xxxxxxxx" />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Payment Methods (optional)</Label>
-            <Input
-              {...register("payment_methods")}
-              placeholder="Cash, Card, QR Pay — pisah dengan koma"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Parking Info (optional)</Label>
-            <Textarea {...register("parking_remarks")} rows={2} placeholder="Free parking belakang bangunan…" />
-          </div>
-
-          {/* Muslim friendly */}
-          <div className="flex items-center gap-3 rounded-xl border border-border p-3">
-            <Switch
-              checked={isMuslimFriendly ?? false}
-              onCheckedChange={(v) => setValue("is_muslim_friendly", v)}
-              id="muslim-friendly"
-            />
-            <Label htmlFor="muslim-friendly" className="cursor-pointer">
-              Muslim-Friendly (fitting room/surau available)
-            </Label>
-          </div>
-
-          {/* Operation hours */}
-          <div className="space-y-2">
-            <Label>Waktu Operasi (optional) — contoh: 10:00 AM - 9:00 PM atau "Tutup"</Label>
-            <div className="grid grid-cols-2 gap-2">
+          {showHours && (
+            <div className="rounded-lg border border-border p-3 space-y-2">
+              <p className="text-[11px] text-muted-foreground">Contoh: 10:00 AM – 9:00 PM atau kosongkan = Tutup</p>
               {DAYS_OF_WEEK.map((day) => (
-                <div key={day} className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground capitalize w-20 shrink-0">{day}</span>
+                <div key={day} className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground capitalize w-16 shrink-0">{day}</span>
                   <Input
                     {...register(day)}
-                    placeholder="9:00 AM - 9:00 PM"
-                    className="text-xs h-8"
+                    placeholder="10:00 AM – 9:00 PM"
+                    className="h-8 text-xs"
                   />
                 </div>
               ))}
             </div>
-          </div>
+          )}
         </form>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={pending}>Batal</Button>
-          <Button type="submit" form="location-form" disabled={pending}>
-            {pending ? "Saving…" : "Simpan"}
+          <Button variant="outline" size="sm" onClick={onClose} disabled={pending}>Batal</Button>
+          <Button size="sm" type="submit" form="location-form" disabled={pending}>
+            {pending ? "Saving…" : "Simpan Lokasi"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -318,11 +325,7 @@ function LocationDialog({
 // ─── Product Dialog ───────────────────────────────────────────────────────────
 
 function ProductDialog({
-  open,
-  onClose,
-  onSave,
-  initial,
-  pending,
+  open, onClose, onSave, initial, pending,
 }: {
   open: boolean;
   onClose: () => void;
@@ -331,11 +334,7 @@ function ProductDialog({
   pending: boolean;
 }) {
   const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
+    register, handleSubmit, reset, control, watch, setValue,
     formState: { errors },
   } = useForm<ProductForm>({
     resolver: zodResolver(productSchema),
@@ -350,60 +349,91 @@ function ProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="text-base">
             {initial ? "Edit Produk" : "Tambah Produk"}
           </DialogTitle>
         </DialogHeader>
 
-        <form id="product-form" onSubmit={handleSubmit(onSave)} className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label>Jenis Produk *</Label>
+        <form id="product-form" onSubmit={handleSubmit(onSave)} className="space-y-4">
+          <Field label="Nama / Jenis Produk *" error={errors.product_type?.message}>
             <Input
               {...register("product_type")}
-              placeholder="e.g. Clothing, Accessories, Homewear…"
+              placeholder="e.g. Baju Kurung, Hijab, Accessories"
+              className="h-9 text-sm"
             />
-            {errors.product_type && (
-              <p className="text-xs text-destructive">{errors.product_type.message}</p>
-            )}
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label>Jantina (optional)</Label>
-            <Select
-              value={genderValue}
-              onValueChange={(v) => setValue("product_gender", v)}
-            >
-              <SelectTrigger>
+          <Field label="Jantina (optional)">
+            <Select value={genderValue} onValueChange={(v) => setValue("product_gender", v)}>
+              <SelectTrigger className="h-9 text-sm">
                 <SelectValue placeholder="Pilih jantina…" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="unisex">🤝 Unisex</SelectItem>
-                <SelectItem value="lelaki">👔 Lelaki sahaja</SelectItem>
-                <SelectItem value="perempuan">👗 Perempuan sahaja</SelectItem>
+                <SelectItem value="unisex">Unisex</SelectItem>
+                <SelectItem value="lelaki">Lelaki</SelectItem>
+                <SelectItem value="perempuan">Perempuan</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label>Deskripsi (optional)</Label>
+          <Field label="Deskripsi (optional)">
             <Textarea
               {...register("product_description")}
               rows={3}
               placeholder="Cerita sikit tentang produk ni…"
+              className="text-sm"
             />
-          </div>
+          </Field>
         </form>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={pending}>Batal</Button>
-          <Button type="submit" form="product-form" disabled={pending}>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={pending}>Batal</Button>
+          <Button size="sm" type="submit" form="product-form" disabled={pending}>
             {pending ? "Saving…" : "Simpan"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Tab nav helper ───────────────────────────────────────────────────────────
+
+function TabNav({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { id: string; label: string; count?: number; disabled?: boolean }[];
+  active: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="flex border-b border-border mb-6 gap-0">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => !tab.disabled && onChange(tab.id)}
+          disabled={tab.disabled}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            active === tab.id
+              ? "border-primary text-primary"
+              : tab.disabled
+              ? "border-transparent text-muted-foreground/40 cursor-not-allowed"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {tab.label}
+          {tab.count !== undefined && (
+            <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+              {tab.count}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -415,20 +445,18 @@ export default function BrandFormPage() {
   const brandId = id ? Number(id) : null;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("brand");
 
-  // ── Brand form ──────────────────────────────────────────────────────────────
+  // ── Brand form ───────────────────────────────────────────────────────────────
   const {
     register: registerBrand,
     handleSubmit: handleBrandSubmit,
     reset: resetBrand,
-    watch: watchBrand,
-    setValue: setValueBrand,
+    control: controlBrand,
     formState: { errors: brandErrors },
-  } = useForm<BrandForm>({
-    resolver: zodResolver(brandSchema),
-  });
+  } = useForm<BrandForm>({ resolver: zodResolver(brandSchema) });
 
-  // ── Fetch brand + children when in edit mode ────────────────────────────────
+  // ── Fetch ────────────────────────────────────────────────────────────────────
   const { data: brandData, isLoading } = useQuery({
     queryKey: ["admin-brand", brandId],
     queryFn: async () => {
@@ -451,7 +479,6 @@ export default function BrandFormPage() {
     enabled: isEdit,
   });
 
-  // Populate brand form when data loads
   useEffect(() => {
     if (brandData) {
       resetBrand({
@@ -462,21 +489,18 @@ export default function BrandFormPage() {
     }
   }, [brandData, resetBrand]);
 
-  
   const locations: DBLocation[] = brandData?.Locations ?? [];
   const products: DBProduct[] = brandData?.Products ?? [];
   const onlineRecord: DBOnline | null = brandData?.Online?.[0] ?? null;
 
-  // ── Online CRUD ─────────────────────────────────────────────────────────────
+  // ── Online form ──────────────────────────────────────────────────────────────
   const [onlinePending, setOnlinePending] = useState(false);
   const {
     register: registerOnline,
     handleSubmit: handleOnlineSubmit,
     reset: resetOnline,
     formState: { errors: onlineErrors },
-  } = useForm<OnlineForm>({
-    resolver: zodResolver(onlineSchema),
-  });
+  } = useForm<OnlineForm>({ resolver: zodResolver(onlineSchema) });
 
   useEffect(() => {
     if (onlineRecord) {
@@ -505,7 +529,6 @@ export default function BrandFormPage() {
         brand_id: brandId,
         updated_at: new Date().toISOString(),
       };
-
       if (onlineRecord) {
         const { error } = await supabase.from("Online").update(payload).eq("online_id", onlineRecord.online_id);
         if (error) throw error;
@@ -523,8 +546,7 @@ export default function BrandFormPage() {
     }
   };
 
-
-  // ── Save brand ──────────────────────────────────────────────────────────────
+  // ── Save brand ───────────────────────────────────────────────────────────────
   const [brandPending, setBrandPending] = useState(false);
   const saveBrand = async (data: BrandForm) => {
     setBrandPending(true);
@@ -557,17 +579,16 @@ export default function BrandFormPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-brands"] });
       queryClient.invalidateQueries({ queryKey: ["admin-brand", brandId] });
     } catch {
-      toast.error("Gagal menyimpan brand. Cuba lagi.");
+      toast.error("Gagal menyimpan brand.");
     } finally {
       setBrandPending(false);
     }
   };
 
-  // ── Location CRUD ───────────────────────────────────────────────────────────
-  const [locDialog, setLocDialog] = useState<{
-    open: boolean;
-    editing: DBLocation | null;
-  }>({ open: false, editing: null });
+  // ── Location CRUD ────────────────────────────────────────────────────────────
+  const [locDialog, setLocDialog] = useState<{ open: boolean; editing: DBLocation | null }>({
+    open: false, editing: null,
+  });
   const [locPending, setLocPending] = useState(false);
   const [deleteLocTarget, setDeleteLocTarget] = useState<number | null>(null);
 
@@ -593,12 +614,8 @@ export default function BrandFormPage() {
         brand_id: brandId,
         updated_at: new Date().toISOString(),
       };
-
       if (locDialog.editing) {
-        const { error } = await supabase
-          .from("Locations")
-          .update(payload)
-          .eq("location_id", locDialog.editing.location_id);
+        const { error } = await supabase.from("Locations").update(payload).eq("location_id", locDialog.editing.location_id);
         if (error) throw error;
         toast.success("Lokasi dikemaskini.");
       } else {
@@ -606,7 +623,6 @@ export default function BrandFormPage() {
         if (error) throw error;
         toast.success("Lokasi ditambah.");
       }
-
       queryClient.invalidateQueries({ queryKey: ["admin-brand", brandId] });
       setLocDialog({ open: false, editing: null });
     } catch {
@@ -629,10 +645,9 @@ export default function BrandFormPage() {
   });
 
   // ── Product CRUD ─────────────────────────────────────────────────────────────
-  const [prodDialog, setProdDialog] = useState<{
-    open: boolean;
-    editing: DBProduct | null;
-  }>({ open: false, editing: null });
+  const [prodDialog, setProdDialog] = useState<{ open: boolean; editing: DBProduct | null }>({
+    open: false, editing: null,
+  });
   const [prodPending, setProdPending] = useState(false);
   const [deleteProdTarget, setDeleteProdTarget] = useState<number | null>(null);
 
@@ -646,12 +661,8 @@ export default function BrandFormPage() {
         product_gender: form.product_gender || null,
         brand_id: brandId,
       };
-
       if (prodDialog.editing) {
-        const { error } = await supabase
-          .from("Products")
-          .update(payload)
-          .eq("product_id", prodDialog.editing.product_id);
+        const { error } = await supabase.from("Products").update(payload).eq("product_id", prodDialog.editing.product_id);
         if (error) throw error;
         toast.success("Produk dikemaskini.");
       } else {
@@ -659,7 +670,6 @@ export default function BrandFormPage() {
         if (error) throw error;
         toast.success("Produk ditambah.");
       }
-
       queryClient.invalidateQueries({ queryKey: ["admin-brand", brandId] });
       setProdDialog({ open: false, editing: null });
     } catch {
@@ -681,234 +691,230 @@ export default function BrandFormPage() {
     onError: () => toast.error("Gagal memadam produk."),
   });
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
+  const tabs = [
+    { id: "brand", label: "Brand Info" },
+    { id: "online", label: "Online", disabled: !isEdit },
+    {
+      id: "locations",
+      label: "Lokasi Fizikal",
+      count: isEdit ? locations.length : undefined,
+      disabled: !isEdit,
+    },
+    {
+      id: "products",
+      label: "Produk",
+      count: isEdit ? products.length : undefined,
+      disabled: !isEdit,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Top bar */}
+      {/* Header */}
       <header className="border-b border-border bg-card sticky top-0 z-20">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+          <Button variant="ghost" size="sm" onClick={() => navigate("/admin")} className="h-8">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Admin
           </Button>
-          <h1 className="font-display font-bold text-base">
-            {isEdit ? "Edit Brand" : "Tambah Brand Baru"}
+          <div className="h-4 w-px bg-border" />
+          <h1 className="font-display font-bold text-sm">
+            {isEdit ? (brandData?.brand_name ?? "Edit Brand") : "Tambah Brand Baru"}
           </h1>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        <Tabs defaultValue="brand">
-          <TabsList className="mb-6">
-            
-            <TabsTrigger value="brand">Brand Info</TabsTrigger>
-            <TabsTrigger value="online" disabled={!isEdit}>
-              <Globe className="w-3.5 h-3.5 mr-1.5" />
-              Online
-            </TabsTrigger>
-            <TabsTrigger value="locations" disabled={!isEdit}>
+      <main className="max-w-3xl mx-auto px-4 py-6">
+        <TabNav tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
-              <MapPin className="w-3.5 h-3.5 mr-1.5" />
-              Lokasi {isEdit && <span className="ml-1 opacity-60">({locations.length})</span>}
-            </TabsTrigger>
-            <TabsTrigger value="products" disabled={!isEdit}>
-              <Package className="w-3.5 h-3.5 mr-1.5" />
-              Produk {isEdit && <span className="ml-1 opacity-60">({products.length})</span>}
-            </TabsTrigger>
-          </TabsList>
+        {/* ── Brand Info ──────────────────────────────────────────────── */}
+        {activeTab === "brand" && (
+          <form onSubmit={handleBrandSubmit(saveBrand)} className="space-y-4 max-w-lg">
+            <Field label="Nama Brand *" error={brandErrors.brand_name?.message}>
+              <Input
+                {...registerBrand("brand_name")}
+                placeholder="Nama brand"
+                className="h-9 text-sm"
+              />
+            </Field>
 
-          {/* ── Brand Info Tab ────────────────────────────────────────────── */}
-          <TabsContent value="brand">
-            <form onSubmit={handleBrandSubmit(saveBrand)} className="space-y-5 rounded-2xl border border-border bg-card p-6">
-              <div className="space-y-1.5">
-                <Label htmlFor="brand_name">Nama Brand *</Label>
-                <Input
-                  id="brand_name"
-                  {...registerBrand("brand_name")}
-                  placeholder="Pestle & Mortar Clothing"
-                />
-                {brandErrors.brand_name && (
-                  <p className="text-xs text-destructive">{brandErrors.brand_name.message}</p>
+            <Field label="Kategori *" error={brandErrors.brand_category?.message}>
+              <Controller
+                control={controlBrand}
+                name="brand_category"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Pilih kategori…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BRAND_CATEGORIES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
-              </div>
+              />
+            </Field>
 
-              <div className="space-y-1.5">
-                <Label>Kategori *</Label>
-                <Select
-                  value={watchBrand("brand_category")}
-                  onValueChange={(v) => setValueBrand("brand_category", v, { shouldValidate: true })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih kategori…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRAND_CATEGORIES.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {brandErrors.brand_category && (
-                  <p className="text-xs text-destructive">{brandErrors.brand_category.message}</p>
-                )}
-              </div>
+            <Field label="Deskripsi (optional)">
+              <Textarea
+                {...registerBrand("brand_description")}
+                rows={4}
+                placeholder="Cerita sikit tentang brand ni…"
+                className="text-sm"
+              />
+            </Field>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="brand_description">Deskripsi (optional)</Label>
-                <Textarea
-                  id="brand_description"
-                  {...registerBrand("brand_description")}
-                  rows={4}
-                  placeholder="Cerita sikit tentang brand ni…"
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={brandPending}>
-                  {brandPending ? "Saving…" : isEdit ? "Kemaskini Brand" : "Buat Brand"}
-                </Button>
-              </div>
-
+            <div className="flex items-center gap-3 pt-2">
+              <Button type="submit" size="sm" disabled={brandPending}>
+                {brandPending ? "Saving…" : isEdit ? "Kemaskini" : "Buat Brand"}
+              </Button>
               {!isEdit && (
-                <p className="text-xs text-muted-foreground text-center">
-                  Selepas brand dibuat, anda boleh tambah lokasi dan produk.
+                <p className="text-xs text-muted-foreground">
+                  Lokasi & produk boleh ditambah selepas brand dibuat.
                 </p>
               )}
-            </form>
-          </TabsContent>
+            </div>
+          </form>
+        )}
 
-          
-          {/* ── Online Tab ──────────────────────────────────────────────── */}
-          <TabsContent value="online">
-            <form onSubmit={handleOnlineSubmit(saveOnline)} className="space-y-4 rounded-2xl border border-border bg-card p-6">
-              <div className="space-y-1.5">
-                <Label>Website Link</Label>
-                <Input {...registerOnline("website_link")} placeholder="https://www.brand.com" />
-                {onlineErrors.website_link && <p className="text-xs text-destructive">{onlineErrors.website_link.message}</p>}
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Instagram Link</Label>
-                  <Input {...registerOnline("instagram_link")} placeholder="https://instagram.com/..." />
-                  {onlineErrors.instagram_link && <p className="text-xs text-destructive">{onlineErrors.instagram_link.message}</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <Label>TikTok Link</Label>
-                  <Input {...registerOnline("tiktok_link")} placeholder="https://tiktok.com/..." />
-                  {onlineErrors.tiktok_link && <p className="text-xs text-destructive">{onlineErrors.tiktok_link.message}</p>}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Facebook Link</Label>
-                <Input {...registerOnline("facebook_link")} placeholder="https://facebook.com/..." />
-                {onlineErrors.facebook_link && <p className="text-xs text-destructive">{onlineErrors.facebook_link.message}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Extra / Additional Link (e.g. Shopee)</Label>
-                <Input {...registerOnline("additional_link")} placeholder="https://shopee.com.my/..." />
-                {onlineErrors.additional_link && <p className="text-xs text-destructive">{onlineErrors.additional_link.message}</p>}
-              </div>
+        {/* ── Online ──────────────────────────────────────────────────── */}
+        {activeTab === "online" && (
+          <form onSubmit={handleOnlineSubmit(saveOnline)} className="space-y-4 max-w-lg">
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
+              Satu brand hanya boleh ada satu rekod online. Isi mana-mana link yang berkenaan.
+            </div>
 
-              <div className="flex justify-end mt-4">
-                 <Button type="submit" disabled={onlinePending}>
-                  {onlinePending ? "Saving..." : "Simpan Online Info"}
-                </Button>
+            <Field label="Website" error={onlineErrors.website_link?.message}>
+              <Input {...registerOnline("website_link")} placeholder="https://www.brand.com" className="h-9 text-sm" />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Instagram" error={onlineErrors.instagram_link?.message}>
+                <Input {...registerOnline("instagram_link")} placeholder="https://instagram.com/…" className="h-9 text-sm" />
+              </Field>
+              <Field label="TikTok" error={onlineErrors.tiktok_link?.message}>
+                <Input {...registerOnline("tiktok_link")} placeholder="https://tiktok.com/@…" className="h-9 text-sm" />
+              </Field>
+            </div>
+
+            <Field label="Facebook" error={onlineErrors.facebook_link?.message}>
+              <Input {...registerOnline("facebook_link")} placeholder="https://facebook.com/…" className="h-9 text-sm" />
+            </Field>
+
+            <Field label="Shopee / Link Tambahan" error={onlineErrors.additional_link?.message}>
+              <Input {...registerOnline("additional_link")} placeholder="https://shopee.com.my/…" className="h-9 text-sm" />
+            </Field>
+
+            <Button type="submit" size="sm" disabled={onlinePending}>
+              {onlinePending ? "Saving…" : onlineRecord ? "Kemaskini Online" : "Simpan Online"}
+            </Button>
+          </form>
+        )}
+
+        {/* ── Locations ───────────────────────────────────────────────── */}
+        {activeTab === "locations" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">
+                {locations.length === 0 ? "Belum ada lokasi fizikal." : `${locations.length} lokasi`}
+              </p>
+              <Button size="sm" onClick={() => setLocDialog({ open: true, editing: null })}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> Tambah Lokasi
+              </Button>
+            </div>
+
+            {locations.length === 0 && (
+              <div className="rounded-xl border-2 border-dashed border-border py-12 text-center text-muted-foreground text-sm">
+                Tiada lokasi fizikal lagi.
               </div>
-            </form>
-          </TabsContent>
+            )}
 
-          {/* ── Locations Tab ─────────────────────────────────────────────── */}
-
-          <TabsContent value="locations">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Lokasi ({locations.length})</h3>
-                <Button size="sm" onClick={() => setLocDialog({ open: true, editing: null })}>
-                  <Plus className="w-4 h-4 mr-1" /> Tambah Lokasi
-                </Button>
-              </div>
-
-              {locations.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-10">
-                  Belum ada lokasi. Tambah sekurang-kurangnya satu lokasi.
-                </p>
-              )}
-
+            <div className="space-y-2">
               {locations.map((loc) => (
                 <div
                   key={loc.location_id}
-                  className="rounded-xl border border-border bg-card p-4 flex items-start gap-3"
+                  className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3"
                 >
-                  <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">
+                    <p className="text-sm font-medium truncate">
                       {[loc.street_address, loc.city, loc.state].filter(Boolean).join(", ")}
                     </p>
                     {loc.is_muslim_friendly && (
-                      <span className="text-xs text-primary font-medium">☪ Muslim-Friendly</span>
+                      <span className="text-[11px] text-primary">Muslim-Friendly</span>
                     )}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
+                      className="h-7 w-7 p-0"
                       onClick={() => setLocDialog({ open: true, editing: loc })}
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      <Pencil className="w-3 h-3" />
                     </Button>
                     <Button
-                      variant="destructive"
+                      variant="ghost"
                       size="sm"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       onClick={() => setDeleteLocTarget(loc.location_id)}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
-          </TabsContent>
+          </div>
+        )}
 
-          {/* ── Products Tab ──────────────────────────────────────────────── */}
-          <TabsContent value="products">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Produk ({products.length})</h3>
-                <Button size="sm" onClick={() => setProdDialog({ open: true, editing: null })}>
-                  <Plus className="w-4 h-4 mr-1" /> Tambah Produk
-                </Button>
+        {/* ── Products ────────────────────────────────────────────────── */}
+        {activeTab === "products" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">
+                {products.length === 0 ? "Belum ada produk." : `${products.length} produk`}
+              </p>
+              <Button size="sm" onClick={() => setProdDialog({ open: true, editing: null })}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> Tambah Produk
+              </Button>
+            </div>
+
+            {products.length === 0 && (
+              <div className="rounded-xl border-2 border-dashed border-border py-12 text-center text-muted-foreground text-sm">
+                Tiada produk lagi.
               </div>
+            )}
 
-              {products.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-10">
-                  Belum ada produk.
-                </p>
-              )}
-
+            <div className="space-y-2">
               {products.map((prod) => (
                 <div
                   key={prod.product_id}
-                  className="rounded-xl border border-border bg-card p-4 flex items-start gap-3"
+                  className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3"
                 >
-                  <Package className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <Package className="w-4 h-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{prod.product_type}</p>
+                      <p className="text-sm font-medium">{prod.product_type}</p>
                       {prod.product_gender && (
-                        <span className="text-[10px] uppercase font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] uppercase font-semibold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
                           {prod.product_gender}
                         </span>
                       )}
                     </div>
                     {prod.product_description && (
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                         {prod.product_description}
                       </p>
                     )}
@@ -917,26 +923,28 @@ export default function BrandFormPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="h-7 w-7 p-0"
                       onClick={() => setProdDialog({ open: true, editing: prod })}
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      <Pencil className="w-3 h-3" />
                     </Button>
                     <Button
-                      variant="destructive"
+                      variant="ghost"
                       size="sm"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       onClick={() => setDeleteProdTarget(prod.product_id)}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
       </main>
 
-      {/* Location dialog */}
+      {/* Dialogs */}
       <LocationDialog
         open={locDialog.open}
         onClose={() => setLocDialog({ open: false, editing: null })}
@@ -945,7 +953,6 @@ export default function BrandFormPage() {
         pending={locPending}
       />
 
-      {/* Product dialog */}
       <ProductDialog
         open={prodDialog.open}
         onClose={() => setProdDialog({ open: false, editing: null })}
@@ -962,17 +969,12 @@ export default function BrandFormPage() {
         pending={prodPending}
       />
 
-      {/* Delete location confirmation */}
-      <AlertDialog
-        open={deleteLocTarget !== null}
-        onOpenChange={() => setDeleteLocTarget(null)}
-      >
+      {/* Delete location */}
+      <AlertDialog open={deleteLocTarget !== null} onOpenChange={() => setDeleteLocTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Padam lokasi?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Lokasi ini akan dipadam. Tindakan tidak boleh dibatalkan.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Tindakan tidak boleh dibatalkan.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Batal</AlertDialogCancel>
@@ -989,17 +991,12 @@ export default function BrandFormPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete product confirmation */}
-      <AlertDialog
-        open={deleteProdTarget !== null}
-        onOpenChange={() => setDeleteProdTarget(null)}
-      >
+      {/* Delete product */}
+      <AlertDialog open={deleteProdTarget !== null} onOpenChange={() => setDeleteProdTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Padam produk?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Produk ini akan dipadam. Tindakan tidak boleh dibatalkan.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Tindakan tidak boleh dibatalkan.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Batal</AlertDialogCancel>
