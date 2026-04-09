@@ -43,12 +43,26 @@ export interface DBProduct {
   created_at: string;
   product_type: string | null;
   product_description: string | null;
+  product_gender: string | null;
+  brand_id: number | null;
+}
+
+export interface DBOnline {
+  online_id: number;
+  created_at: string;
+  facebook_link: string | null;
+  instagram_link: string | null;
+  tiktok_link: string | null;
+  website_link: string | null;
+  additional_link: string | null;
+  updated_at: string | null;
   brand_id: number | null;
 }
 
 export interface BrandWithDetails extends DBBrand {
   Locations: DBLocation[];
   Products: DBProduct[];
+  Online: DBOnline[];
 }
 
 export const DAYS_OF_WEEK = [

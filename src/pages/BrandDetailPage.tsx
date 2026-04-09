@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   MapPin, Clock, Phone, Car, CreditCard,
   Navigation, ShieldCheck, Calendar, ArrowLeft, Store,
-  MessageSquarePlus, Lock, Package,
+  MessageSquarePlus, Lock, Package, Globe, Link as LinkIcon,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { BrandWithDetails, DBLocation } from "@/lib/database.types";
@@ -127,6 +127,7 @@ const LocationCard = ({ loc }: { loc: DBLocation }) => {
       {loc.is_muslim_friendly && (
         <InfoRow icon={<ShieldCheck className="w-4 h-4" />} label="Muslim-Friendly">
           <p className="text-sm text-primary font-medium">☪ Muslim-Friendly</p>
+          <p className="text-xs text-muted-foreground">Pakaian menutup aurat / fitting room dsb.</p>
         </InfoRow>
       )}
     </div>
@@ -138,7 +139,7 @@ const LocationCard = ({ loc }: { loc: DBLocation }) => {
 async function fetchBrand(id: number): Promise<BrandWithDetails | null> {
   const { data, error } = await supabase
     .from("Brand")
-    .select("*, Locations(*), Products(*)")
+    .select("*, Locations(*), Products(*), Online(*)")
     .eq("brand_id", id)
     .single();
   if (error) return null;
@@ -228,11 +229,62 @@ const BrandDetailPage = () => {
           </div>
         </section>
 
+        
+        {/* ── Online Platforms ─────────────────────────────── */}
+        {brand.Online && brand.Online.length > 0 && (
+          <section>
+            <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
+              <Globe className="w-5 h-5" /> Online (Website / Social Media)
+            </h2>
+            <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
+              {brand.Online[0]?.website_link && (
+                <InfoRow icon={<Globe className="w-4 h-4" />} label="Website">
+                  <a href={brand.Online[0].website_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
+                    {brand.Online[0].website_link}
+                  </a>
+                </InfoRow>
+              )}
+              {brand.Online[0]?.instagram_link && (
+                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Instagram">
+                  <a href={brand.Online[0].instagram_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
+                    {brand.Online[0].instagram_link}
+                  </a>
+                </InfoRow>
+              )}
+              {brand.Online[0]?.tiktok_link && (
+                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="TikTok">
+                  <a href={brand.Online[0].tiktok_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
+                    {brand.Online[0].tiktok_link}
+                  </a>
+                </InfoRow>
+              )}
+              {brand.Online[0]?.facebook_link && (
+                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Facebook">
+                  <a href={brand.Online[0].facebook_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
+                    {brand.Online[0].facebook_link}
+                  </a>
+                </InfoRow>
+              )}
+              {brand.Online[0]?.additional_link && (
+                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Lain-lain / Shopee">
+                  <a href={brand.Online[0].additional_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
+                    {brand.Online[0].additional_link}
+                  </a>
+                </InfoRow>
+              )}
+              {!brand.Online[0]?.website_link && !brand.Online[0]?.instagram_link && !brand.Online[0]?.tiktok_link && !brand.Online[0]?.facebook_link && !brand.Online[0]?.additional_link && (
+                <p className="text-sm text-muted-foreground">Tiada pautan disediakan.</p>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* ── Locations ─────────────────────────────────── */}
+
         {brand.Locations.length > 0 && (
           <section>
             <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
-              <Store className="w-5 h-5" /> Lokasi ({brand.Locations.length})
+              <Store className="w-5 h-5" /> Lokasi Fizikal ({brand.Locations.length})
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {brand.Locations.map((loc) => (
@@ -251,7 +303,7 @@ const BrandDetailPage = () => {
             <div className="space-y-3">
               {brand.Products.map((p) => (
                 <div key={p.product_id}>
-                  <p className="font-medium text-sm">{p.product_type}</p>
+                  <p className="font-medium text-sm flex items-center gap-2">{p.product_type} {p.product_gender && <span className="text-[10px] uppercase font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{p.product_gender}</span>}</p>
                   {p.product_description && (
                     <p className="text-xs text-muted-foreground mt-0.5">{p.product_description}</p>
                   )}

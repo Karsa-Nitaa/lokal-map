@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, Plus, Pencil, Trash2, MapPin, Package,
+  ArrowLeft, Plus, Pencil, Trash2, MapPin, Package, Globe,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import type { DBLocation, DBProduct } from "@/lib/database.types";
+import type { DBLocation, DBProduct, DBOnline } from "@/lib/database.types";
 import { DAYS_OF_WEEK, MALAYSIAN_STATES } from "@/lib/database.types";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -75,9 +75,20 @@ const locationSchema = z.object({
 });
 type LocationForm = z.infer<typeof locationSchema>;
 
+
+const onlineSchema = z.object({
+  facebook_link: safeUrl.optional(),
+  instagram_link: safeUrl.optional(),
+  tiktok_link: safeUrl.optional(),
+  website_link: safeUrl.optional(),
+  additional_link: safeUrl.optional(),
+});
+type OnlineForm = z.infer<typeof onlineSchema>;
+
 const productSchema = z.object({
   product_type: z.string().min(1, "Jenis produk wajib diisi"),
   product_description: z.string().optional(),
+  product_gender: z.string().optional(),
 });
 type ProductForm = z.infer<typeof productSchema>;
 
@@ -354,6 +365,22 @@ function ProductDialog({
             )}
           </div>
 
+          
+          <div className="space-y-1.5">
+            <Label>Jantina (optional)</Label>
+            <Select onValueChange={(v) => { document.getElementById('hf-product-gender').value = v; document.getElementById('hf-product-gender').dispatchEvent(new Event('change', { bubbles: true })); }} defaultValue={initial?.product_gender ?? ""}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Semua / Unisex" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unisex">Unisex</SelectItem>
+                  <SelectItem value="lelaki">Lelaki sahaja</SelectItem>
+                  <SelectItem value="perempuan">Perempuan sahaja</SelectItem>
+                </SelectContent>
+            </Select>
+            <input type="hidden" id="hf-product-gender" {...register("product_gender")} />
+          </div>
+
           <div className="space-y-1.5">
             <Label>Deskripsi (optional)</Label>
             <Textarea
@@ -402,7 +429,7 @@ export default function BrandFormPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("Brand")
-        .select("*, Locations(*), Products(*)")
+        .select("*, Locations(*), Products(*), Online(*)")
         .eq("brand_id", brandId!)
         .single();
       if (error) throw error;
@@ -412,6 +439,7 @@ export default function BrandFormPage() {
         brand_description: string | null;
         Locations: DBLocation[];
         Products: DBProduct[];
+        Online: DBOnline[];
       };
     },
     enabled: isEdit,
@@ -428,8 +456,67 @@ export default function BrandFormPage() {
     }
   }, [brandData, resetBrand]);
 
+  
   const locations: DBLocation[] = brandData?.Locations ?? [];
   const products: DBProduct[] = brandData?.Products ?? [];
+  const onlineRecord: DBOnline | null = brandData?.Online?.[0] ?? null;
+
+  // ── Online CRUD ─────────────────────────────────────────────────────────────
+  const [onlinePending, setOnlinePending] = useState(false);
+  const {
+    register: registerOnline,
+    handleSubmit: handleOnlineSubmit,
+    reset: resetOnline,
+    formState: { errors: onlineErrors },
+  } = useForm<OnlineForm>({
+    resolver: zodResolver(onlineSchema),
+  });
+
+  useEffect(() => {
+    if (onlineRecord) {
+      resetOnline({
+        facebook_link: onlineRecord.facebook_link ?? "",
+        instagram_link: onlineRecord.instagram_link ?? "",
+        tiktok_link: onlineRecord.tiktok_link ?? "",
+        website_link: onlineRecord.website_link ?? "",
+        additional_link: onlineRecord.additional_link ?? "",
+      });
+    } else {
+      resetOnline({});
+    }
+  }, [onlineRecord, resetOnline]);
+
+  const saveOnline = async (form: OnlineForm) => {
+    if (!brandId) return;
+    setOnlinePending(true);
+    try {
+      const payload = {
+        facebook_link: form.facebook_link || null,
+        instagram_link: form.instagram_link || null,
+        tiktok_link: form.tiktok_link || null,
+        website_link: form.website_link || null,
+        additional_link: form.additional_link || null,
+        brand_id: brandId,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (onlineRecord) {
+        const { error } = await supabase.from("Online").update(payload).eq("online_id", onlineRecord.online_id);
+        if (error) throw error;
+        toast.success("Platform online dikemaskini.");
+      } else {
+        const { error } = await supabase.from("Online").insert(payload);
+        if (error) throw error;
+        toast.success("Platform online berjaya disimpan.");
+      }
+      queryClient.invalidateQueries({ queryKey: ["admin-brand", brandId] });
+    } catch {
+      toast.error("Gagal menyimpan platform online.");
+    } finally {
+      setOnlinePending(false);
+    }
+  };
+
 
   // ── Save brand ──────────────────────────────────────────────────────────────
   const [brandPending, setBrandPending] = useState(false);
@@ -550,6 +637,7 @@ export default function BrandFormPage() {
       const payload = {
         product_type: form.product_type,
         product_description: form.product_description || null,
+        product_gender: form.product_gender || null,
         brand_id: brandId,
       };
 
@@ -614,8 +702,14 @@ export default function BrandFormPage() {
       <main className="max-w-3xl mx-auto px-4 py-8">
         <Tabs defaultValue="brand">
           <TabsList className="mb-6">
+            
             <TabsTrigger value="brand">Brand Info</TabsTrigger>
+            <TabsTrigger value="online" disabled={!isEdit}>
+              <Globe className="w-3.5 h-3.5 mr-1.5" />
+              Online
+            </TabsTrigger>
             <TabsTrigger value="locations" disabled={!isEdit}>
+
               <MapPin className="w-3.5 h-3.5 mr-1.5" />
               Lokasi {isEdit && <span className="ml-1 opacity-60">({locations.length})</span>}
             </TabsTrigger>
@@ -684,7 +778,48 @@ export default function BrandFormPage() {
             </form>
           </TabsContent>
 
+          
+          {/* ── Online Tab ──────────────────────────────────────────────── */}
+          <TabsContent value="online">
+            <form onSubmit={handleOnlineSubmit(saveOnline)} className="space-y-4 rounded-2xl border border-border bg-card p-6">
+              <div className="space-y-1.5">
+                <Label>Website Link</Label>
+                <Input {...registerOnline("website_link")} placeholder="https://www.brand.com" />
+                {onlineErrors.website_link && <p className="text-xs text-destructive">{onlineErrors.website_link.message}</p>}
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Instagram Link</Label>
+                  <Input {...registerOnline("instagram_link")} placeholder="https://instagram.com/..." />
+                  {onlineErrors.instagram_link && <p className="text-xs text-destructive">{onlineErrors.instagram_link.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>TikTok Link</Label>
+                  <Input {...registerOnline("tiktok_link")} placeholder="https://tiktok.com/..." />
+                  {onlineErrors.tiktok_link && <p className="text-xs text-destructive">{onlineErrors.tiktok_link.message}</p>}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Facebook Link</Label>
+                <Input {...registerOnline("facebook_link")} placeholder="https://facebook.com/..." />
+                {onlineErrors.facebook_link && <p className="text-xs text-destructive">{onlineErrors.facebook_link.message}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Extra / Additional Link (e.g. Shopee)</Label>
+                <Input {...registerOnline("additional_link")} placeholder="https://shopee.com.my/..." />
+                {onlineErrors.additional_link && <p className="text-xs text-destructive">{onlineErrors.additional_link.message}</p>}
+              </div>
+
+              <div className="flex justify-end mt-4">
+                 <Button type="submit" disabled={onlinePending}>
+                  {onlinePending ? "Saving..." : "Simpan Online Info"}
+                </Button>
+              </div>
+            </form>
+          </TabsContent>
+
           {/* ── Locations Tab ─────────────────────────────────────────────── */}
+
           <TabsContent value="locations">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -807,6 +942,7 @@ export default function BrandFormPage() {
             ? {
                 product_type: prodDialog.editing.product_type ?? "",
                 product_description: prodDialog.editing.product_description ?? "",
+                product_gender: prodDialog.editing.product_gender ?? "",
               }
             : undefined
         }

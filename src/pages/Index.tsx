@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search, MapPin, Filter, X, Lock } from "lucide-react";
 import { CATEGORIES } from "@/data/brands";
@@ -13,7 +13,7 @@ import heroBanner from "@/assets/hero-banner.jpg";
 async function fetchAllBrands(): Promise<BrandWithDetails[]> {
   const { data, error } = await supabase
     .from("Brand")
-    .select("*, Locations(*), Products(*)")
+    .select("*, Locations(*), Products(*), Online(*)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as BrandWithDetails[];
@@ -21,11 +21,34 @@ async function fetchAllBrands(): Promise<BrandWithDetails[]> {
 
 const Index = () => {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [selectedState, setSelectedState] = useState("");
-  const [muslimFriendlyOnly, setMuslimFriendlyOnly] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const search = searchParams.get("search") || "";
+  const selectedCategory = (searchParams.get("category") as Category) || null;
+  const selectedState = searchParams.get("state") || "";
+  const muslimFriendlyOnly = searchParams.get("muslim") === "true";
+  const showFilters = searchParams.get("filters") === "true";
+  const selectedGender = searchParams.get("gender") || "";
+  const storeType = searchParams.get("storeType") || "";
+
+  const updateParams = (updates: Record<string, string | null>) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      Object.entries(updates).forEach(([k, v]) => {
+        if (v === null || v === "") p.delete(k);
+        else p.set(k, v);
+      });
+      return p;
+    }, { replace: true });
+  };
+
+  const setSearch = (v: string) => updateParams({ search: v });
+  const setSelectedCategory = (v: Category | null) => updateParams({ category: v });
+  const setSelectedState = (v: string) => updateParams({ state: v });
+  const setMuslimFriendlyOnly = (v: boolean) => updateParams({ muslim: v ? "true" : null });
+  const setShowFilters = (v: boolean) => updateParams({ filters: v ? "true" : null });
+  const setSelectedGender = (v: string) => updateParams({ gender: v });
+  const setStoreType = (v: string) => updateParams({ storeType: v });
 
   const { data: allBrands = [], isLoading } = useQuery({
     queryKey: ["public-brands"],
@@ -61,10 +84,10 @@ const Index = () => {
         b.Locations.some((l) => l.is_muslim_friendly);
       return matchCategory && matchSearch && matchState && matchMuslim;
     });
-  }, [selectedCategory, allBrands, search, selectedState, muslimFriendlyOnly]);
+  }, [selectedCategory, allBrands, search, selectedState, muslimFriendlyOnly, selectedGender, storeType]);
 
-  const hasActiveFilters = !!selectedState || muslimFriendlyOnly;
-  const activeFilterCount = (selectedState ? 1 : 0) + (muslimFriendlyOnly ? 1 : 0);
+  const hasActiveFilters = !!selectedState || muslimFriendlyOnly || !!selectedGender || !!storeType;
+  const activeFilterCount = (selectedState ? 1 : 0) + (muslimFriendlyOnly ? 1 : 0) + (selectedGender ? 1 : 0) + (storeType ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-background">
