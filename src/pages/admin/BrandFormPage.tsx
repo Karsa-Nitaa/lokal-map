@@ -334,6 +334,8 @@ function ProductDialog({
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<ProductForm>({
     resolver: zodResolver(productSchema),
@@ -343,6 +345,8 @@ function ProductDialog({
   useEffect(() => {
     reset(initial ?? {});
   }, [open, initial, reset]);
+
+  const genderValue = watch("product_gender") ?? "";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -365,20 +369,21 @@ function ProductDialog({
             )}
           </div>
 
-          
           <div className="space-y-1.5">
             <Label>Jantina (optional)</Label>
-            <Select onValueChange={(v) => { document.getElementById('hf-product-gender').value = v; document.getElementById('hf-product-gender').dispatchEvent(new Event('change', { bubbles: true })); }} defaultValue={initial?.product_gender ?? ""}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Semua / Unisex" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unisex">Unisex</SelectItem>
-                  <SelectItem value="lelaki">Lelaki sahaja</SelectItem>
-                  <SelectItem value="perempuan">Perempuan sahaja</SelectItem>
-                </SelectContent>
+            <Select
+              value={genderValue}
+              onValueChange={(v) => setValue("product_gender", v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih jantina…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unisex">🤝 Unisex</SelectItem>
+                <SelectItem value="lelaki">👔 Lelaki sahaja</SelectItem>
+                <SelectItem value="perempuan">👗 Perempuan sahaja</SelectItem>
+              </SelectContent>
             </Select>
-            <input type="hidden" id="hf-product-gender" {...register("product_gender")} />
           </div>
 
           <div className="space-y-1.5">
@@ -437,6 +442,7 @@ export default function BrandFormPage() {
         brand_id: number;
         brand_name: string | null;
         brand_description: string | null;
+        brand_category: string | null;
         Locations: DBLocation[];
         Products: DBProduct[];
         Online: DBOnline[];
@@ -893,7 +899,14 @@ export default function BrandFormPage() {
                 >
                   <Package className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">{prod.product_type}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-sm">{prod.product_type}</p>
+                      {prod.product_gender && (
+                        <span className="text-[10px] uppercase font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                          {prod.product_gender}
+                        </span>
+                      )}
+                    </div>
                     {prod.product_description && (
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                         {prod.product_description}

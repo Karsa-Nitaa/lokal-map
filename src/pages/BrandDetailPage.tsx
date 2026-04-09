@@ -31,21 +31,22 @@ const InfoRow = ({
   </div>
 );
 
+// One-line compact operating hours
 function OperationHours({ hours }: { hours: Record<string, string> | null }) {
   if (!hours || Object.keys(hours).length === 0) {
     return <p className="text-sm text-muted-foreground">—</p>;
   }
+  const entries = DAYS_OF_WEEK.filter((d) => hours[d]);
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
-      {DAYS_OF_WEEK.map((day) =>
-        hours[day] ? (
-          <div key={day} className="flex justify-between gap-2">
-            <span className="capitalize text-muted-foreground">{day.slice(0, 3)}</span>
-            <span>{hours[day]}</span>
-          </div>
-        ) : null
-      )}
-    </div>
+    <p className="text-sm text-muted-foreground leading-relaxed">
+      {entries.map((day, i) => (
+        <span key={day}>
+          <span className="font-medium capitalize text-foreground/80">{day.slice(0, 3)}</span>{" "}
+          {hours[day]}
+          {i < entries.length - 1 ? " · " : ""}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -127,7 +128,9 @@ const LocationCard = ({ loc }: { loc: DBLocation }) => {
       {loc.is_muslim_friendly && (
         <InfoRow icon={<ShieldCheck className="w-4 h-4" />} label="Muslim-Friendly">
           <p className="text-sm text-primary font-medium">☪ Muslim-Friendly</p>
-          <p className="text-xs text-muted-foreground">Pakaian menutup aurat / fitting room dsb.</p>
+          <p className="text-xs text-muted-foreground">
+            Pakaian menutup aurat, ada fitting room berasaingan, atau ciri-ciri bersesuaian dengan Muslim.
+          </p>
         </InfoRow>
       )}
     </div>
@@ -145,6 +148,14 @@ async function fetchBrand(id: number): Promise<BrandWithDetails | null> {
   if (error) return null;
   return data as BrandWithDetails;
 }
+
+// ── Gender badge ──────────────────────────────────────────────────────────────
+
+const GENDER_LABEL: Record<string, string> = {
+  lelaki: "👔 Lelaki",
+  perempuan: "👗 Perempuan",
+  unisex: "🤝 Unisex",
+};
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -181,6 +192,9 @@ const BrandDetailPage = () => {
   }
 
   const isMuslimFriendly = brand.Locations.some((l) => l.is_muslim_friendly);
+  const onlineData = brand.Online?.[0] ?? null;
+  const hasOnline = !!(onlineData?.website_link || onlineData?.instagram_link || onlineData?.tiktok_link || onlineData?.facebook_link || onlineData?.additional_link);
+
   const lastUpdated = brand.Locations.reduce<string | null>((acc, l) => {
     if (!l.updated_at) return acc;
     if (!acc || l.updated_at > acc) return l.updated_at;
@@ -221,66 +235,74 @@ const BrandDetailPage = () => {
                 {type}
               </span>
             ))}
+            {hasOnline && (
+              <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 font-medium">
+                🌐 Online
+              </span>
+            )}
+            {brand.Locations.length > 0 && (
+              <span className="text-xs px-2.5 py-1 rounded-full bg-tag text-tag-foreground font-medium">
+                🏪 Fizikal
+              </span>
+            )}
             {isMuslimFriendly && (
-              <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium">
+              <span
+                title="Pakaian menutup aurat, fitting room berasingan, atau ciri-ciri bersesuaian Muslim."
+                className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium cursor-help"
+              >
                 ☪ Muslim-Friendly
               </span>
             )}
           </div>
         </section>
 
-        
-        {/* ── Online Platforms ─────────────────────────────── */}
-        {brand.Online && brand.Online.length > 0 && (
+        {/* ── Online Platforms ─────────────────────────── */}
+        {hasOnline && onlineData && (
           <section>
             <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
-              <Globe className="w-5 h-5" /> Online (Website / Social Media)
+              <Globe className="w-5 h-5" /> Online
             </h2>
             <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
-              {brand.Online[0]?.website_link && (
+              {onlineData.website_link && (
                 <InfoRow icon={<Globe className="w-4 h-4" />} label="Website">
-                  <a href={brand.Online[0].website_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
-                    {brand.Online[0].website_link}
+                  <a href={onlineData.website_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
+                    {onlineData.website_link}
                   </a>
                 </InfoRow>
               )}
-              {brand.Online[0]?.instagram_link && (
+              {onlineData.instagram_link && (
                 <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Instagram">
-                  <a href={brand.Online[0].instagram_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
-                    {brand.Online[0].instagram_link}
+                  <a href={onlineData.instagram_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
+                    {onlineData.instagram_link}
                   </a>
                 </InfoRow>
               )}
-              {brand.Online[0]?.tiktok_link && (
+              {onlineData.tiktok_link && (
                 <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="TikTok">
-                  <a href={brand.Online[0].tiktok_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
-                    {brand.Online[0].tiktok_link}
+                  <a href={onlineData.tiktok_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
+                    {onlineData.tiktok_link}
                   </a>
                 </InfoRow>
               )}
-              {brand.Online[0]?.facebook_link && (
+              {onlineData.facebook_link && (
                 <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Facebook">
-                  <a href={brand.Online[0].facebook_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
-                    {brand.Online[0].facebook_link}
+                  <a href={onlineData.facebook_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
+                    {onlineData.facebook_link}
                   </a>
                 </InfoRow>
               )}
-              {brand.Online[0]?.additional_link && (
-                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Lain-lain / Shopee">
-                  <a href={brand.Online[0].additional_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline">
-                    {brand.Online[0].additional_link}
+              {onlineData.additional_link && (
+                <InfoRow icon={<LinkIcon className="w-4 h-4" />} label="Lain-lain (Shopee dll.)">
+                  <a href={onlineData.additional_link} target="_blank" rel="noreferrer" className="text-sm text-blue-500 hover:underline break-all">
+                    {onlineData.additional_link}
                   </a>
                 </InfoRow>
-              )}
-              {!brand.Online[0]?.website_link && !brand.Online[0]?.instagram_link && !brand.Online[0]?.tiktok_link && !brand.Online[0]?.facebook_link && !brand.Online[0]?.additional_link && (
-                <p className="text-sm text-muted-foreground">Tiada pautan disediakan.</p>
               )}
             </div>
           </section>
         )}
 
         {/* ── Locations ─────────────────────────────────── */}
-
         {brand.Locations.length > 0 && (
           <section>
             <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
@@ -303,7 +325,14 @@ const BrandDetailPage = () => {
             <div className="space-y-3">
               {brand.Products.map((p) => (
                 <div key={p.product_id}>
-                  <p className="font-medium text-sm flex items-center gap-2">{p.product_type} {p.product_gender && <span className="text-[10px] uppercase font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{p.product_gender}</span>}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-sm">{p.product_type}</p>
+                    {p.product_gender && (
+                      <span className="text-[10px] uppercase font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                        {GENDER_LABEL[p.product_gender] ?? p.product_gender}
+                      </span>
+                    )}
+                  </div>
                   {p.product_description && (
                     <p className="text-xs text-muted-foreground mt-0.5">{p.product_description}</p>
                   )}

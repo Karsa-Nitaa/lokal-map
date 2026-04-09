@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search, MapPin, Filter, X, Lock } from "lucide-react";
@@ -23,6 +23,7 @@ const Index = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // ── Derive all UI state from URL params (persists across back-nav) ──────────
   const search = searchParams.get("search") || "";
   const selectedCategory = (searchParams.get("category") as Category) || null;
   const selectedState = searchParams.get("state") || "";
@@ -32,23 +33,18 @@ const Index = () => {
   const storeType = searchParams.get("storeType") || "";
 
   const updateParams = (updates: Record<string, string | null>) => {
-    setSearchParams(prev => {
-      const p = new URLSearchParams(prev);
-      Object.entries(updates).forEach(([k, v]) => {
-        if (v === null || v === "") p.delete(k);
-        else p.set(k, v);
-      });
-      return p;
-    }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        Object.entries(updates).forEach(([k, v]) => {
+          if (v === null || v === "") p.delete(k);
+          else p.set(k, v);
+        });
+        return p;
+      },
+      { replace: true }
+    );
   };
-
-  const setSearch = (v: string) => updateParams({ search: v });
-  const setSelectedCategory = (v: Category | null) => updateParams({ category: v });
-  const setSelectedState = (v: string) => updateParams({ state: v });
-  const setMuslimFriendlyOnly = (v: boolean) => updateParams({ muslim: v ? "true" : null });
-  const setShowFilters = (v: boolean) => updateParams({ filters: v ? "true" : null });
-  const setSelectedGender = (v: string) => updateParams({ gender: v });
-  const setStoreType = (v: string) => updateParams({ storeType: v });
 
   const { data: allBrands = [], isLoading } = useQuery({
     queryKey: ["public-brands"],
@@ -56,14 +52,12 @@ const Index = () => {
   });
 
   const resetFilters = () => {
-    setSelectedState("");
-    setMuslimFriendlyOnly(false);
+    updateParams({ state: null, muslim: null, gender: null, storeType: null });
   };
 
   const handleCategorySelect = (cat: Category) => {
-    setSelectedCategory((prev) => (prev === cat ? null : cat));
-    resetFilters();
-    setShowFilters(false);
+    const next = selectedCategory === cat ? null : cat;
+    updateParams({ category: next, state: null, muslim: null, gender: null, storeType: null, filters: null });
   };
 
   const filtered = useMemo(() => {
@@ -82,12 +76,26 @@ const Index = () => {
       const matchMuslim =
         !muslimFriendlyOnly ||
         b.Locations.some((l) => l.is_muslim_friendly);
-      return matchCategory && matchSearch && matchState && matchMuslim;
+      const matchGender =
+        !selectedGender ||
+        b.Products.some(
+          (p) => p.product_gender === selectedGender || p.product_gender === "unisex"
+        );
+      const matchStoreType =
+        !storeType ||
+        (storeType === "online"
+          ? b.Online && b.Online.length > 0
+          : b.Locations && b.Locations.length > 0);
+      return matchCategory && matchSearch && matchState && matchMuslim && matchGender && matchStoreType;
     });
   }, [selectedCategory, allBrands, search, selectedState, muslimFriendlyOnly, selectedGender, storeType]);
 
   const hasActiveFilters = !!selectedState || muslimFriendlyOnly || !!selectedGender || !!storeType;
-  const activeFilterCount = (selectedState ? 1 : 0) + (muslimFriendlyOnly ? 1 : 0) + (selectedGender ? 1 : 0) + (storeType ? 1 : 0);
+  const activeFilterCount =
+    (selectedState ? 1 : 0) +
+    (muslimFriendlyOnly ? 1 : 0) +
+    (selectedGender ? 1 : 0) +
+    (storeType ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,7 +108,6 @@ const Index = () => {
         />
         <div className="absolute inset-0 bg-[hsl(var(--hero-overlay)/0.75)]" />
 
-        {/* Auth buttons */}
         <div className="relative z-10 text-center px-4 max-w-3xl mx-auto">
           <h1 className="font-display text-5xl md:text-7xl font-bold text-primary-foreground mb-4 animate-fade-in-up">
             Lokal-Map
@@ -123,7 +130,7 @@ const Index = () => {
               type="text"
               placeholder="Cari brand, produk, atau lokasi..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => updateParams({ search: e.target.value })}
               className="w-full pl-12 pr-4 py-4 rounded-2xl bg-background/95 backdrop-blur-md border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent shadow-lg text-base"
             />
           </div>
@@ -182,7 +189,7 @@ const Index = () => {
                 )}
               </div>
               <button
-                onClick={() => setShowFilters(!showFilters)}
+                onClick={() => updateParams({ filters: showFilters ? null : "true" })}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
                   showFilters || hasActiveFilters
                     ? "bg-primary text-primary-foreground border-primary"
@@ -201,13 +208,14 @@ const Index = () => {
 
             {showFilters && (
               <div className="mb-8 p-6 rounded-2xl glass-card animate-fade-in space-y-5">
+                {/* Negeri */}
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground mb-3">Negeri / Area</h3>
                   <div className="flex flex-wrap gap-2">
                     {MALAYSIAN_STATES.map((s) => (
                       <button
                         key={s}
-                        onClick={() => setSelectedState(selectedState === s ? "" : s)}
+                        onClick={() => updateParams({ state: selectedState === s ? null : s })}
                         className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1 ${
                           selectedState === s
                             ? "bg-primary text-primary-foreground"
@@ -220,9 +228,59 @@ const Index = () => {
                     ))}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+
+                {/* Platform */}
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">Platform</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "fizikal", label: "🏪 Fizikal sahaja" },
+                      { value: "online", label: "🌐 Online sahaja" },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => updateParams({ storeType: storeType === value ? null : value })}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                          storeType === value
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-tag text-tag-foreground hover:bg-primary/10"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Jantina */}
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">Jantina Produk</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "lelaki", label: "👔 Lelaki" },
+                      { value: "perempuan", label: "👗 Perempuan" },
+                      { value: "unisex", label: "🤝 Unisex" },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => updateParams({ gender: selectedGender === value ? null : value })}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                          selectedGender === value
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-tag text-tag-foreground hover:bg-primary/10"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Muslim Friendly */}
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">Lain-lain</h3>
                   <button
-                    onClick={() => setMuslimFriendlyOnly(!muslimFriendlyOnly)}
+                    onClick={() => updateParams({ muslim: muslimFriendlyOnly ? null : "true" })}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       muslimFriendlyOnly
                         ? "bg-primary text-primary-foreground"

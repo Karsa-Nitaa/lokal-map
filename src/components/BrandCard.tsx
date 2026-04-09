@@ -13,6 +13,8 @@ const BrandCard = ({ brand, index, onClick }: BrandCardProps) => {
     .filter(Boolean)
     .join(", ");
   const isMuslimFriendly = brand.Locations.some((l) => l.is_muslim_friendly);
+  const hasOnline = brand.Online && brand.Online.length > 0;
+  const hasPhysical = brand.Locations.length > 0;
   const productTypes = [
     ...new Set(brand.Products.map((p) => p.product_type).filter(Boolean)),
   ] as string[];
@@ -66,12 +68,24 @@ const BrandCard = ({ brand, index, onClick }: BrandCardProps) => {
           </div>
         )}
 
-        {/* Muslim friendly badge */}
-        {isMuslimFriendly && (
-          <div className="mt-3 flex items-center gap-1.5 text-xs text-primary font-medium">
-            <span>☪</span> Muslim-Friendly
-          </div>
-        )}
+        {/* Footer badges */}
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          {hasOnline && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 font-medium">
+              🌐 Online
+            </span>
+          )}
+          {hasPhysical && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-tag text-tag-foreground font-medium">
+              🏪 Fizikal
+            </span>
+          )}
+          {isMuslimFriendly && (
+            <span className="text-xs text-primary font-medium">
+              ☪ Muslim-Friendly
+            </span>
+          )}
+        </div>
       </div>
     </button>
   );
