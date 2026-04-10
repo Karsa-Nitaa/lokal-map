@@ -6,8 +6,31 @@ import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Plus, Pencil, Trash2, MapPin, Package, Globe,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Loader2, Crosshair,
 } from "lucide-react";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3001";
+
+// Extract coordinates from a full Google Maps URL (client-side, no API needed)
+function extractCoordsFromUrl(url: string): { lat: string; lng: string } | null {
+  // Pattern 1: @lat,lon,zoom  e.g. /@5.4056215,100.402462,17z
+  const atMatch = url.match(/@(-?\d+\.?\d+),(-?\d+\.?\d+)/);
+  if (atMatch) return { lat: atMatch[1], lng: atMatch[2] };
+
+  // Pattern 2: !3d<lat>...!4d<lng>  in data=... segment
+  const dataMatch = url.match(/!3d(-?\d+\.\d+).*?!4d(-?\d+\.\d+)/);
+  if (dataMatch) return { lat: dataMatch[1], lng: dataMatch[2] };
+
+  // Pattern 3: /maps/search/lat,+lon
+  const searchMatch = url.match(/\/maps\/search\/(-?\d+\.?\d+),\+?(-?\d+\.?\d+)/);
+  if (searchMatch) return { lat: searchMatch[1], lng: searchMatch[2] };
+
+  // Pattern 4: ?q=lat,lon
+  const qMatch = url.match(/[?&]q=(-?\d+\.?\d+),\+?(-?\d+\.?\d+)/);
+  if (qMatch) return { lat: qMatch[1], lng: qMatch[2] };
+
+  return null;
+}
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -182,9 +205,11 @@ function LocationDialog({
   pending: boolean;
 }) {
   const [showHours, setShowHours] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [detectMsg, setDetectMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   const {
-    register, handleSubmit, reset, control,
+    register, handleSubmit, reset, control, watch, setValue,
     formState: { errors },
   } = useForm<LocationForm>({
     resolver: zodResolver(locationSchema),
@@ -194,7 +219,62 @@ function LocationDialog({
   useEffect(() => {
     reset(initial ?? { is_muslim_friendly: false });
     setShowHours(false);
+    setDetectMsg(null);
   }, [open, initial, reset]);
+
+  const gmapLink = watch("googlemap_link") ?? "";
+  const latValue = watch("latitude") ?? "";
+  const lngValue = watch("longitude") ?? "";
+
+  async function handleAutoDetect() {
+    const url = gmapLink.trim();
+    if (!url) {
+      setDetectMsg({ type: "err", text: "Isi Google Maps link dulu." });
+      return;
+    }
+
+    setDetecting(true);
+    setDetectMsg(null);
+
+    // 1. Try client-side extraction first (works for full Google Maps URLs)
+    const clientCoords = extractCoordsFromUrl(url);
+    if (clientCoords) {
+      setValue("latitude", clientCoords.lat);
+      setValue("longitude", clientCoords.lng);
+      setDetectMsg({ type: "ok", text: `✓ ${clientCoords.lat}, ${clientCoords.lng}` });
+      setDetecting(false);
+      return;
+    }
+
+    // 2. Short link or unrecognised — ask backend to resolve
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/resolve-gmaps?url=${encodeURIComponent(url)}`
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setDetectMsg({ type: "err", text: err.error ?? `Server error ${res.status}. Isi manual.` });
+        setDetecting(false);
+        return;
+      }
+      const data = await res.json();
+      if (data.lat && data.lng) {
+        setValue("latitude", String(data.lat));
+        setValue("longitude", String(data.lng));
+        setDetectMsg({ type: "ok", text: `✓ ${data.lat}, ${data.lng}` });
+      } else {
+        setDetectMsg({ type: "err", text: data.error ?? "Koordinat tidak ditemui. Isi manual." });
+      }
+    } catch (e) {
+      // fetch itself threw → likely CORS or backend not reachable
+      const msg = e instanceof TypeError
+        ? `Tak dapat reach backend (${BACKEND_URL}). Pastikan backend running & CORS ok.`
+        : "Gagal auto-detect. Isi koordinat manual.";
+      setDetectMsg({ type: "err", text: msg });
+    } finally {
+      setDetecting(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -247,14 +327,55 @@ function LocationDialog({
 
           <SectionHeading>Navigasi</SectionHeading>
 
+          <Field label="Google Maps Link" error={errors.googlemap_link?.message}
+            hint="Paste mana-mana format: https://maps.app.goo.gl/… atau URL penuh Google Maps">
+            <div className="flex gap-2">
+              <Input
+                {...register("googlemap_link")}
+                placeholder="https://maps.app.goo.gl/… atau URL penuh"
+                className="h-9 text-sm flex-1"
+              />
+              <button
+                type="button"
+                onClick={handleAutoDetect}
+                disabled={detecting || !gmapLink.trim()}
+                title="Auto-detect koordinat dari link"
+                className="h-9 px-3 rounded-md border border-border bg-muted text-muted-foreground text-xs font-medium flex items-center gap-1.5 hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-colors"
+              >
+                {detecting
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Crosshair className="w-3.5 h-3.5" />}
+                {detecting ? "Detecting…" : "Auto-detect"}
+              </button>
+            </div>
+            {detectMsg && (
+              <p className={`text-[11px] mt-1 ${detectMsg.type === "ok" ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+                {detectMsg.text}
+              </p>
+            )}
+          </Field>
+
+          {/* Lat / Long — auto-filled or manual entry */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Google Maps Link" error={errors.googlemap_link?.message}>
-              <Input {...register("googlemap_link")} placeholder="https://maps.google.com/…" className="h-9 text-sm" />
+            <Field label="Latitude" hint="Auto-detect atau isi manual">
+              <Input
+                {...register("latitude")}
+                placeholder="e.g. 5.4057"
+                className={`h-9 text-sm ${latValue ? "border-green-500/50 bg-green-50/30 dark:bg-green-900/10" : ""}`}
+              />
             </Field>
-            <Field label="Waze Link" error={errors.waze_link?.message}>
-              <Input {...register("waze_link")} placeholder="https://waze.com/…" className="h-9 text-sm" />
+            <Field label="Longitude" hint="Auto-detect atau isi manual">
+              <Input
+                {...register("longitude")}
+                placeholder="e.g. 100.4050"
+                className={`h-9 text-sm ${lngValue ? "border-green-500/50 bg-green-50/30 dark:bg-green-900/10" : ""}`}
+              />
             </Field>
           </div>
+
+          <Field label="Waze Link" error={errors.waze_link?.message}>
+            <Input {...register("waze_link")} placeholder="https://waze.com/…" className="h-9 text-sm" />
+          </Field>
 
           <SectionHeading>Kenalan & Bayaran</SectionHeading>
 

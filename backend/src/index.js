@@ -4,9 +4,22 @@ import cors from "cors";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-app.use(cors({ origin: FRONTEND_URL }));
+// Allow all localhost origins in dev; restrict to FRONTEND_URL in production
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (curl, Postman) and any localhost port
+      if (!origin || origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1")) {
+        return callback(null, true);
+      }
+      const allowed = (process.env.FRONTEND_URL ?? "").split(",").map((s) => s.trim());
+      if (allowed.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // ── Health check ──────────────────────────────────────────────────────────────
@@ -95,6 +108,87 @@ app.get("/api/instagram-refresh-token", async (req, res) => {
   } catch (err) {
     console.error("Token refresh error:", err);
     res.status(500).json({ error: "Failed to refresh token" });
+  }
+});
+
+// ── Coord extractor helper ────────────────────────────────────────────────────
+
+function extractCoordsFromUrl(url) {
+  // Pattern 1: @lat,lon,zoom  e.g. /@5.4056215,100.402462,17z
+  const atMatch = url.match(/@(-?\d+\.?\d+),(-?\d+\.?\d+)/);
+  if (atMatch) return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+
+  // Pattern 2: !3d<lat>...!4d<lng>  in data= segment
+  const dataMatch = url.match(/!3d(-?\d+\.\d+).*?!4d(-?\d+\.\d+)/);
+  if (dataMatch) return { lat: parseFloat(dataMatch[1]), lng: parseFloat(dataMatch[2]) };
+
+  // Pattern 3: /maps/search/lat,+lon  e.g. /maps/search/5.333473,+103.150213
+  const searchMatch = url.match(/\/maps\/search\/(-?\d+\.?\d+),\+?(-?\d+\.?\d+)/);
+  if (searchMatch) return { lat: parseFloat(searchMatch[1]), lng: parseFloat(searchMatch[2]) };
+
+  // Pattern 4: ?q=lat,lon  e.g. ?q=5.333473,103.150213
+  const qMatch = url.match(/[?&]q=(-?\d+\.?\d+),\+?(-?\d+\.?\d+)/);
+  if (qMatch) return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+
+  return null;
+}
+
+// ── GET /api/resolve-gmaps ────────────────────────────────────────────────────
+// Resolves any Google Maps link (short or full) → { lat, lng }
+// Supports:
+//   • https://maps.app.goo.gl/xxxxx          (short share link)
+//   • https://www.google.com/maps/place/...   (full URL with @lat,lon)
+//   • Any Google Maps URL containing coordinates
+app.get("/api/resolve-gmaps", async (req, res) => {
+  let url = req.query.url;
+  if (!url) return res.status(400).json({ error: "Missing url parameter" });
+
+  // Ensure protocol
+  if (!/^https?:\/\//.test(url)) url = "https://" + url;
+
+  // Try client-side extraction first (works for full URLs without a network call)
+  const quick = extractCoordsFromUrl(url);
+  if (quick) return res.json(quick);
+
+  // For short links or URLs without embedded coords — follow redirect
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        // Mimic a browser so Google doesn't redirect to a consent page
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+          "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
+
+    const finalUrl = response.url;
+
+    // Try extracting from the resolved URL first
+    const fromUrl = extractCoordsFromUrl(finalUrl);
+    if (fromUrl) return res.json(fromUrl);
+
+    // Last resort: scan the response HTML for coordinates
+    const html = await response.text();
+
+    // Google embeds coords in a JS variable like window.APP_INITIALIZATION_STATE
+    // Pattern: [lat,lng] as floats near each other in the initialisation state
+    const htmlMatch = html.match(/,(-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})/);
+    if (htmlMatch) {
+      const lat = parseFloat(htmlMatch[1]);
+      const lng = parseFloat(htmlMatch[2]);
+      // Sanity check: valid lat/lng range
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return res.json({ lat, lng });
+      }
+    }
+
+    return res.status(404).json({ error: "Koordinat tidak ditemui dalam link ini." });
+  } catch (err) {
+    console.error("resolve-gmaps error:", err);
+    return res.status(500).json({ error: "Gagal resolve link. Cuba URL penuh Google Maps." });
   }
 });
 
