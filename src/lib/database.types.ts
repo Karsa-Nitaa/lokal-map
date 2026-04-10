@@ -9,12 +9,15 @@ export type BrandCategory =
   | "photography"
   | "others";
 
+export type PriceRange = "$" | "$$" | "$$$";
+
 export interface DBBrand {
   brand_id: number;
   created_at: string;
   brand_name: string | null;
   brand_description: string | null;
   brand_category: BrandCategory | null;
+  price_range: PriceRange | null;
 }
 
 export interface DBLocation {
@@ -87,11 +90,10 @@ export const MALAYSIAN_STATES = [
   "Perak",
   "Perlis",
   "Pulau Pinang",
+  "Selangor",
+  "Kuala Lumpur",
+  "Putrajaya",
+  "Terengganu",
   "Sabah",
   "Sarawak",
-  "Selangor",
-  "Terengganu",
-  "Kuala Lumpur",
-  "Labuan",
-  "Putrajaya",
 ] as const;

@@ -39,10 +39,17 @@ const BRAND_CATEGORIES = [
   { value: "others", label: "Others" },
 ] as const;
 
+const PRICE_RANGES = [
+  { value: "$", label: "$ — RM0 – 50.99" },
+  { value: "$$", label: "$$ — RM51 – 99.99" },
+  { value: "$$$", label: "$$$ — RM100+" },
+] as const;
+
 const brandSchema = z.object({
   brand_name: z.string().min(1, "Nama brand wajib diisi"),
   brand_description: z.string().optional(),
   brand_category: z.string().min(1, "Kategori wajib dipilih"),
+  price_range: z.string().optional(),
 });
 type BrandForm = z.infer<typeof brandSchema>;
 
@@ -471,6 +478,7 @@ export default function BrandFormPage() {
         brand_name: string | null;
         brand_description: string | null;
         brand_category: string | null;
+        price_range: string | null;
         Locations: DBLocation[];
         Products: DBProduct[];
         Online: DBOnline[];
@@ -485,6 +493,7 @@ export default function BrandFormPage() {
         brand_name: brandData.brand_name ?? "",
         brand_description: brandData.brand_description ?? "",
         brand_category: brandData.brand_category ?? "",
+        price_range: brandData.price_range ?? "",
       });
     }
   }, [brandData, resetBrand]);
@@ -558,6 +567,7 @@ export default function BrandFormPage() {
             brand_name: data.brand_name,
             brand_description: data.brand_description ?? null,
             brand_category: data.brand_category,
+            price_range: data.price_range || null,
           })
           .eq("brand_id", brandId!);
         if (error) throw error;
@@ -569,6 +579,7 @@ export default function BrandFormPage() {
             brand_name: data.brand_name,
             brand_description: data.brand_description ?? null,
             brand_category: data.brand_category,
+            price_range: data.price_range || null,
           })
           .select("brand_id")
           .single();
@@ -772,6 +783,29 @@ export default function BrandFormPage() {
                 rows={4}
                 placeholder="Cerita sikit tentang brand ni…"
                 className="text-sm"
+              />
+            </Field>
+
+            <Field
+              label="Julat Harga (optional)"
+              hint="$ = RM0–50.99  ·  $$ = RM51–99.99  ·  $$$ = RM100+"
+            >
+              <Controller
+                control={controlBrand}
+                name="price_range"
+                render={({ field }) => (
+                  <Select value={field.value ?? ""} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Pilih julat harga…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Tiada —</SelectItem>
+                      {PRICE_RANGES.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               />
             </Field>
 

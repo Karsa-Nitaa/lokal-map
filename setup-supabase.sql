@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS public."Online" (
 -- 2. Add product_gender to Products table (if it doesn't already exist)
 ALTER TABLE public."Products" ADD COLUMN IF NOT EXISTS product_gender text;
 
+-- 3. Add price_range to Brand table
+-- Values: '$' = RM0-50.99, '$$' = RM51-99.99, '$$$' = RM100+
+ALTER TABLE public."Brand" ADD COLUMN IF NOT EXISTS price_range text
+  CHECK (price_range IN ('$', '$$', '$$$'));
+
 -- 3. (Optional) Make sure RLS for Online table allows public read, and auth write
 -- You can set this up via the Supabase Dashboard directly, or run:
 ALTER TABLE public."Online" ENABLE ROW LEVEL SECURITY;

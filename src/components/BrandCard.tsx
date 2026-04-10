@@ -56,11 +56,18 @@ const BrandCard = ({ brand, index, onClick }: BrandCardProps) => {
               <span className="text-xs text-muted-foreground mt-0.5">Online only</span>
             ) : null}
           </div>
-          {categoryLabel && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium shrink-0 whitespace-nowrap">
-              {categoryLabel}
-            </span>
-          )}
+            <div className="flex items-center gap-1 shrink-0">
+            {brand.price_range && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-semibold whitespace-nowrap">
+                {brand.price_range}
+              </span>
+            )}
+            {categoryLabel && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium whitespace-nowrap">
+                {categoryLabel}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Description — fixed 2 lines so cards stay same height */}

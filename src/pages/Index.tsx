@@ -69,7 +69,11 @@ const Index = () => {
         (b.brand_name ?? "").toLowerCase().includes(q) ||
         (b.brand_description ?? "").toLowerCase().includes(q) ||
         b.Products.some((p) => (p.product_type ?? "").toLowerCase().includes(q));
-      const matchState = !selectedState || b.Locations.some((l) => l.state === selectedState);
+      // Skip state filter for online-only filter — online stores have no physical state
+      const matchState =
+        !selectedState ||
+        storeType === "online" ||
+        b.Locations.some((l) => l.state === selectedState);
       const matchMuslim = !muslimFriendlyOnly || b.Locations.some((l) => l.is_muslim_friendly);
       const matchGender =
         !selectedGender ||

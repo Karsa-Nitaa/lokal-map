@@ -1,13 +1,30 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   MapPin, Clock, Phone, Car, CreditCard,
   Navigation, ShieldCheck, Calendar, ArrowLeft, Store,
   MessageSquarePlus, Lock, Package, Globe, Link as LinkIcon,
+  Compass, Instagram, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { BrandWithDetails, DBLocation } from "@/lib/database.types";
 import { DAYS_OF_WEEK } from "@/lib/database.types";
+
+// ── Haversine distance (km) ───────────────────────────────────────────────────
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -30,7 +47,6 @@ const InfoRow = ({
 );
 
 // ── Smart Operation Hours ─────────────────────────────────────────────────────
-// Groups consecutive days with the same hours, e.g. "Tue – Sun  10:00 AM – 6:00 PM"
 
 const DAY_SHORT: Record<string, string> = {
   monday: "Mon",
@@ -54,13 +70,11 @@ function groupHours(hours: Record<string, string>): { label: string; value: stri
   for (let i = 1; i < days.length; i++) {
     const day = days[i];
     const prevDay = days[i - 1];
-    // Check if consecutive in the week
     const prevIdx = DAYS_OF_WEEK.indexOf(prevDay);
     const curIdx = DAYS_OF_WEEK.indexOf(day);
     if (curIdx === prevIdx + 1 && hours[day] === groupValue) {
       groupEnd = day;
     } else {
-      // Flush current group
       const label =
         groupStart === groupEnd
           ? DAY_SHORT[groupStart]
@@ -71,7 +85,6 @@ function groupHours(hours: Record<string, string>): { label: string; value: stri
       groupValue = hours[day];
     }
   }
-  // Flush last group
   const label =
     groupStart === groupEnd
       ? DAY_SHORT[groupStart]
@@ -84,17 +97,13 @@ function groupHours(hours: Record<string, string>): { label: string; value: stri
 function OperationHours({ hours }: { hours: Record<string, string> | null }) {
   if (!hours) return <p className="text-xs text-muted-foreground">—</p>;
 
-  // Build a full row for all 7 days (mark missing as "Tutup")
   const allDays = DAYS_OF_WEEK.map((d) => ({ day: d, value: hours[d] || null }));
   const hasAny = allDays.some((d) => d.value);
   if (!hasAny) return <p className="text-xs text-muted-foreground">—</p>;
 
-  // Group open days
   const openHours: Record<string, string> = {};
   allDays.forEach(({ day, value }) => { if (value) openHours[day] = value; });
   const openGroups = groupHours(openHours);
-
-  // Closed days (individually)
   const closedDays = allDays.filter((d) => !d.value).map((d) => DAY_SHORT[d.day]);
 
   return (
@@ -126,7 +135,7 @@ const LocationCard = ({ loc, index }: { loc: DBLocation; index: number }) => {
     : [];
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+    <div className="rounded-xl border border-border bg-card p-4 space-y-3 h-full">
       {/* Location number pill */}
       {index > 0 && (
         <div className="text-[11px] font-semibold text-muted-foreground">Lokasi {index + 1}</div>
@@ -207,7 +216,7 @@ const LocationCard = ({ loc, index }: { loc: DBLocation; index: number }) => {
   );
 };
 
-// ── Data fetcher ──────────────────────────────────────────────────────────────
+// ── Data fetchers ─────────────────────────────────────────────────────────────
 
 async function fetchBrand(id: number): Promise<BrandWithDetails | null> {
   const { data, error } = await supabase
@@ -217,6 +226,13 @@ async function fetchBrand(id: number): Promise<BrandWithDetails | null> {
     .single();
   if (error) return null;
   return data as BrandWithDetails;
+}
+
+async function fetchAllBrandsForNearby(): Promise<BrandWithDetails[]> {
+  const { data } = await supabase
+    .from("Brand")
+    .select("*, Locations(*), Products(*), Online(*)");
+  return (data ?? []) as BrandWithDetails[];
 }
 
 // ── Social link row ───────────────────────────────────────────────────────────
@@ -238,16 +254,135 @@ function SocialLink({ href, label }: { href: string; label: string }) {
   );
 }
 
+// ── Instagram Preview component ───────────────────────────────────────────────
+// Calls the backend API. If no token is configured it falls back to a placeholder.
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3001";
+
+type IGMedia = {
+  id: string;
+  media_url: string;
+  thumbnail_url?: string;
+  permalink: string;
+  caption?: string;
+  media_type: string;
+};
+
+async function fetchIGFeed(brandId: number): Promise<IGMedia[]> {
+  const res = await fetch(
+    `${BACKEND_URL}/api/instagram-feed?brandId=${brandId}&limit=3`
+  );
+  if (!res.ok) throw new Error("feed unavailable");
+  const json = await res.json();
+  return json.media ?? [];
+}
+
+function InstagramPreview({ igLink, brandId }: { igLink: string; brandId: number }) {
+  const { data: posts, isLoading, isError } = useQuery({
+    queryKey: ["ig-feed", brandId],
+    queryFn: () => fetchIGFeed(brandId),
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  return (
+    <section>
+      <SectionTitle icon={<Instagram className="w-4 h-4" />} title="Instagram Preview" />
+
+      {isLoading ? (
+        <div className="grid grid-cols-3 gap-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="aspect-square rounded-xl bg-muted animate-pulse" />
+          ))}
+        </div>
+      ) : !isError && posts && posts.length > 0 ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            {posts.map((post) => (
+              <a
+                key={post.id}
+                href={post.permalink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group aspect-square rounded-xl overflow-hidden border border-border"
+              >
+                <img
+                  src={post.media_type === "VIDEO" ? (post.thumbnail_url ?? post.media_url) : post.media_url}
+                  alt={post.caption?.slice(0, 60) ?? "Instagram post"}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+              </a>
+            ))}
+          </div>
+          <a
+            href={igLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Instagram className="w-3.5 h-3.5" /> Lihat semua di Instagram
+          </a>
+        </div>
+      ) : (
+        /* Backend not configured / token missing — show placeholder */
+        <div className="rounded-xl border-2 border-dashed border-border bg-muted/20 p-5 text-center space-y-3">
+          <Instagram className="w-6 h-6 text-muted-foreground mx-auto" />
+          <div>
+            <p className="text-sm font-semibold">Feed Preview</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+              Admin perlu konfigur Instagram token dalam backend untuk aktifkan preview ini.
+            </p>
+          </div>
+          <a
+            href={igLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium hover:opacity-90 transition-opacity"
+          >
+            <Instagram className="w-3.5 h-3.5" /> Lihat di Instagram
+          </a>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── Gender config ─────────────────────────────────────────────────────────────
+
+const GENDER_GROUPS = ["lelaki", "perempuan", "unisex", "umum"] as const;
+const GENDER_LABEL: Record<string, string> = {
+  lelaki: "Lelaki",
+  perempuan: "Perempuan",
+  unisex: "Unisex",
+  umum: "Umum",
+};
+const GENDER_BADGE: Record<string, string> = {
+  lelaki: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  perempuan: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
+  unisex: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  umum: "bg-muted text-muted-foreground",
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
+
+const LOCS_PER_PAGE = 9;
 
 const BrandDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [locPage, setLocPage] = useState(0);
 
   const { data: brand, isLoading } = useQuery({
     queryKey: ["brand", id],
     queryFn: () => fetchBrand(Number(id)),
     enabled: !!id,
+  });
+
+  const { data: allBrands = [] } = useQuery({
+    queryKey: ["all-brands-nearby"],
+    queryFn: fetchAllBrandsForNearby,
+    enabled: !!brand,
+    staleTime: 5 * 60 * 1000,
   });
 
   if (isLoading) {
@@ -288,6 +423,71 @@ const BrandDetailPage = () => {
     return acc;
   }, null);
 
+  // ── Locations: pagination + responsive grid ───────────────────────────────
+  const totalLocs = brand.Locations.length;
+  const totalLocPages = Math.ceil(totalLocs / LOCS_PER_PAGE);
+  const paginatedLocs = brand.Locations.slice(
+    locPage * LOCS_PER_PAGE,
+    (locPage + 1) * LOCS_PER_PAGE
+  );
+  const locGridClass =
+    totalLocs === 1
+      ? "grid-cols-1"
+      : totalLocs === 2
+      ? "grid-cols-1 sm:grid-cols-2"
+      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+
+  // ── Products: group by gender ─────────────────────────────────────────────
+  const knownGenders = new Set(["lelaki", "perempuan", "unisex"]);
+  const productsByGender: Record<string, typeof brand.Products> = {
+    lelaki: brand.Products.filter((p) => p.product_gender === "lelaki"),
+    perempuan: brand.Products.filter((p) => p.product_gender === "perempuan"),
+    unisex: brand.Products.filter((p) => p.product_gender === "unisex"),
+    umum: brand.Products.filter(
+      (p) => !p.product_gender || !knownGenders.has(p.product_gender)
+    ),
+  };
+
+  // ── Visit Nearby: haversine ───────────────────────────────────────────────
+  const NEARBY_RADIUS_KM = 5;
+  const currentCoords = brand.Locations.map((l) => ({
+    lat: parseFloat(l.latitude ?? ""),
+    lon: parseFloat(l.longitude ?? ""),
+  })).filter((c) => !isNaN(c.lat) && !isNaN(c.lon));
+
+  type NearbyBrand = {
+    brand: BrandWithDetails;
+    distanceKm: number;
+    nearLat: number;
+    nearLon: number;
+  };
+  const nearbyBrands: NearbyBrand[] = [];
+  if (currentCoords.length > 0) {
+    for (const other of allBrands) {
+      if (other.brand_id === brand.brand_id) continue;
+      let minDist = Infinity;
+      let nearLat = 0,
+        nearLon = 0;
+      for (const ol of other.Locations) {
+        const olat = parseFloat(ol.latitude ?? "");
+        const olon = parseFloat(ol.longitude ?? "");
+        if (isNaN(olat) || isNaN(olon)) continue;
+        for (const cc of currentCoords) {
+          const d = haversineKm(cc.lat, cc.lon, olat, olon);
+          if (d < minDist) {
+            minDist = d;
+            nearLat = olat;
+            nearLon = olon;
+          }
+        }
+      }
+      if (minDist <= NEARBY_RADIUS_KM) {
+        nearbyBrands.push({ brand: other, distanceKm: minDist, nearLat, nearLon });
+      }
+    }
+    nearbyBrands.sort((a, b) => a.distanceKm - b.distanceKm);
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Top bar */}
@@ -321,11 +521,30 @@ const BrandDetailPage = () => {
 
           {/* Tags row */}
           <div className="flex flex-wrap gap-1.5">
-            {brand.Products.map((p) => p.product_type).filter(Boolean).map((type) => (
-              <span key={type} className="text-[11px] px-2.5 py-1 rounded-full bg-tag text-tag-foreground font-medium">
-                {type}
+            {brand.price_range && (
+              <span
+                title={
+                  brand.price_range === "$"
+                    ? "RM0 – 50.99"
+                    : brand.price_range === "$$"
+                    ? "RM51 – 99.99"
+                    : "RM100+"
+                }
+                className="text-[11px] px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-semibold cursor-help"
+              >
+                {brand.price_range}
               </span>
-            ))}
+            )}
+            {brand.Products.map((p) => p.product_type)
+              .filter(Boolean)
+              .map((type) => (
+                <span
+                  key={type}
+                  className="text-[11px] px-2.5 py-1 rounded-full bg-tag text-tag-foreground font-medium"
+                >
+                  {type}
+                </span>
+              ))}
             {hasOnline && (
               <span className="text-[11px] px-2.5 py-1 rounded-full border border-border text-muted-foreground font-medium">
                 Online
@@ -371,18 +590,51 @@ const BrandDetailPage = () => {
           </section>
         )}
 
+        {/* ── Instagram Feed Preview ───────────────────── */}
+        {onlineData?.instagram_link && (
+          <InstagramPreview igLink={onlineData.instagram_link} brandId={brand.brand_id} />
+        )}
+
         {/* ── Physical Locations ───────────────────────── */}
-        {brand.Locations.length > 0 && (
+        {totalLocs > 0 && (
           <section>
             <SectionTitle
               icon={<Store className="w-4 h-4" />}
-              title={`Lokasi Fizikal${brand.Locations.length > 1 ? ` (${brand.Locations.length})` : ""}`}
+              title={`Lokasi Fizikal${totalLocs > 1 ? ` (${totalLocs})` : ""}`}
             />
-            <div className="grid gap-3 sm:grid-cols-2">
-              {brand.Locations.map((loc, i) => (
-                <LocationCard key={loc.location_id} loc={loc} index={i} />
+
+            <div className={`grid gap-3 ${locGridClass}`}>
+              {paginatedLocs.map((loc, i) => (
+                <LocationCard
+                  key={loc.location_id}
+                  loc={loc}
+                  index={locPage * LOCS_PER_PAGE + i}
+                />
               ))}
             </div>
+
+            {/* Pagination — only when > LOCS_PER_PAGE */}
+            {totalLocPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <button
+                  onClick={() => setLocPage((p) => Math.max(0, p - 1))}
+                  disabled={locPage === 0}
+                  className="w-8 h-8 rounded-lg border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-xs text-muted-foreground">
+                  {locPage + 1} / {totalLocPages}
+                </span>
+                <button
+                  onClick={() => setLocPage((p) => Math.min(totalLocPages - 1, p + 1))}
+                  disabled={locPage === totalLocPages - 1}
+                  className="w-8 h-8 rounded-lg border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </section>
         )}
 
@@ -390,25 +642,43 @@ const BrandDetailPage = () => {
         {brand.Products.length > 0 && (
           <section>
             <SectionTitle icon={<Package className="w-4 h-4" />} title="Produk" />
-            <div className="rounded-xl border border-border bg-card p-4 space-y-2.5">
-              {brand.Products.map((p) => (
-                <div key={p.product_id} className="flex items-start gap-2.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  <div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-medium">{p.product_type}</span>
-                      {p.product_gender && (
-                        <span className="text-[10px] uppercase font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                          {p.product_gender}
-                        </span>
-                      )}
+            <div className="space-y-5">
+              {GENDER_GROUPS.map((gender) => {
+                const prods = productsByGender[gender];
+                if (!prods || prods.length === 0) return null;
+                return (
+                  <div key={gender}>
+                    {/* Gender section header */}
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span
+                        className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${GENDER_BADGE[gender]}`}
+                      >
+                        {GENDER_LABEL[gender]}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {prods.length} produk
+                      </span>
                     </div>
-                    {p.product_description && (
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{p.product_description}</p>
-                    )}
+
+                    {/* Product cards grid */}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {prods.map((p) => (
+                        <div
+                          key={p.product_id}
+                          className="rounded-lg border border-border bg-card px-3 py-2.5"
+                        >
+                          <p className="text-sm font-medium leading-tight">{p.product_type}</p>
+                          {p.product_description && (
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                              {p.product_description}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
@@ -420,6 +690,56 @@ const BrandDetailPage = () => {
             Dikemaskini: {new Date(lastUpdated).toLocaleDateString("ms-MY")}
           </div>
         )}
+
+        {/* ── Visit Nearby ─────────────────────────────── */}
+        <section>
+          <SectionTitle icon={<Compass className="w-4 h-4" />} title="Visit Nearby (5 km)" />
+
+          {currentCoords.length === 0 ? (
+            /* Brand has no coordinates — prompt admin to fill them in */
+            <div className="rounded-xl border-2 border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+              <Compass className="w-5 h-5 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-medium">Koordinat belum dikemaskini</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                Admin perlu isi latitude &amp; longitude pada lokasi untuk aktifkan ciri ini.
+              </p>
+            </div>
+          ) : nearbyBrands.length === 0 ? (
+            <div className="rounded-xl border border-border bg-muted/20 px-4 py-5 text-center">
+              <p className="text-sm text-muted-foreground">Tiada brand lain dalam radius 5 km.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {nearbyBrands.map(({ brand: nb, distanceKm, nearLat, nearLon }) => (
+                <button
+                  key={nb.brand_id}
+                  onClick={() => navigate(`/brand/${nb.brand_id}`)}
+                  className="w-full text-left rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3 hover:border-primary/40 hover:shadow-sm transition-all"
+                >
+                  <MapPin className="w-4 h-4 text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{nb.brand_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {nb.Locations[0]?.city ? `${nb.Locations[0].city} · ` : ""}
+                      {distanceKm < 1
+                        ? `${Math.round(distanceKm * 1000)} m dari sini`
+                        : `${distanceKm.toFixed(1)} km dari sini`}
+                    </p>
+                  </div>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${nearLat},${nearLon}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+                  >
+                    <Navigation className="w-3 h-3" /> Maps
+                  </a>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* ── Reviews placeholder ───────────────────────── */}
         <section>
