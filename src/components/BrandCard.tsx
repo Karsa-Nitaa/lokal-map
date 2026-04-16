@@ -8,7 +8,7 @@ interface BrandCardProps {
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
-  clothing: "Clothing",
+  clothing: "Fashion",
   "local-service": "Local Service",
   "home-bakery": "Home Bakery",
   cafe: "Cafe",

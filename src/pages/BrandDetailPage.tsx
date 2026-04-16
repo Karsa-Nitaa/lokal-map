@@ -254,99 +254,6 @@ function SocialLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-// ── Instagram Preview component ───────────────────────────────────────────────
-// Calls the backend API. If no token is configured it falls back to a placeholder.
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3001";
-
-type IGMedia = {
-  id: string;
-  media_url: string;
-  thumbnail_url?: string;
-  permalink: string;
-  caption?: string;
-  media_type: string;
-};
-
-async function fetchIGFeed(brandId: number): Promise<IGMedia[]> {
-  const res = await fetch(
-    `${BACKEND_URL}/api/instagram-feed?brandId=${brandId}&limit=3`
-  );
-  if (!res.ok) throw new Error("feed unavailable");
-  const json = await res.json();
-  return json.media ?? [];
-}
-
-function InstagramPreview({ igLink, brandId }: { igLink: string; brandId: number }) {
-  const { data: posts, isLoading, isError } = useQuery({
-    queryKey: ["ig-feed", brandId],
-    queryFn: () => fetchIGFeed(brandId),
-    retry: false,
-    staleTime: 10 * 60 * 1000,
-  });
-
-  return (
-    <section>
-      <SectionTitle icon={<Instagram className="w-4 h-4" />} title="Instagram Preview" />
-
-      {isLoading ? (
-        <div className="grid grid-cols-3 gap-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="aspect-square rounded-xl bg-muted animate-pulse" />
-          ))}
-        </div>
-      ) : !isError && posts && posts.length > 0 ? (
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            {posts.map((post) => (
-              <a
-                key={post.id}
-                href={post.permalink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group aspect-square rounded-xl overflow-hidden border border-border"
-              >
-                <img
-                  src={post.media_type === "VIDEO" ? (post.thumbnail_url ?? post.media_url) : post.media_url}
-                  alt={post.caption?.slice(0, 60) ?? "Instagram post"}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-              </a>
-            ))}
-          </div>
-          <a
-            href={igLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Instagram className="w-3.5 h-3.5" /> Lihat semua di Instagram
-          </a>
-        </div>
-      ) : (
-        /* Backend not configured / token missing — show placeholder */
-        <div className="rounded-xl border-2 border-dashed border-border bg-muted/20 p-5 text-center space-y-3">
-          <Instagram className="w-6 h-6 text-muted-foreground mx-auto" />
-          <div>
-            <p className="text-sm font-semibold">Feed Preview</p>
-            <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-              Admin perlu konfigur Instagram token dalam backend untuk aktifkan preview ini.
-            </p>
-          </div>
-          <a
-            href={igLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium hover:opacity-90 transition-opacity"
-          >
-            <Instagram className="w-3.5 h-3.5" /> Lihat di Instagram
-          </a>
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ── Gender config ─────────────────────────────────────────────────────────────
 
 const GENDER_GROUPS = ["lelaki", "perempuan", "unisex", "umum"] as const;
@@ -592,7 +499,26 @@ const BrandDetailPage = () => {
 
         {/* ── Instagram Feed Preview ───────────────────── */}
         {onlineData?.instagram_link && (
-          <InstagramPreview igLink={onlineData.instagram_link} brandId={brand.brand_id} />
+          <section>
+            <SectionTitle icon={<Instagram className="w-4 h-4" />} title="Instagram Preview" />
+            <div className="rounded-xl border-2 border-dashed border-border bg-muted/20 p-5 flex flex-col items-center gap-3 text-center">
+              <Instagram className="w-5 h-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-semibold">Coming Soon</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                  Preview feed Instagram akan diaktifkan tidak lama lagi.
+                </p>
+              </div>
+              <a
+                href={onlineData.instagram_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium hover:opacity-90 transition-opacity"
+              >
+                <Instagram className="w-3.5 h-3.5" /> Lihat di Instagram
+              </a>
+            </div>
+          </section>
         )}
 
         {/* ── Physical Locations ───────────────────────── */}
