@@ -126,23 +126,31 @@ function OperationHours({ hours }: { hours: Record<string, string> | null }) {
 
 // ── Location card ─────────────────────────────────────────────────────────────
 
-const LocationCard = ({ loc, index }: { loc: DBLocation; index: number }) => {
-  const address = [loc.lot_number, loc.street_address, loc.city, loc.postal_code, loc.state]
+const LocationCard = ({ loc, index, total }: { loc: DBLocation; index: number; total: number }) => {
+  // Primary: city + state — short, scannable
+  const shortAddress = [loc.city, loc.state].filter(Boolean).join(", ");
+  // Secondary: street details — shown small below
+  const streetDetail = [loc.lot_number, loc.street_address, loc.postal_code]
     .filter(Boolean)
     .join(", ");
   const paymentList = loc.payment_methods
     ? loc.payment_methods.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
 
+  // Always label: "Lokasi" when only 1 store, "Lokasi 1 / 2 / …" when multiple
+  const locLabel = total === 1 ? "Lokasi" : `Lokasi ${index + 1}`;
+
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3 h-full">
-      {/* Location number pill */}
-      {index > 0 && (
-        <div className="text-[11px] font-semibold text-muted-foreground">Lokasi {index + 1}</div>
-      )}
+      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+        {locLabel}
+      </div>
 
       <InfoRow icon={<MapPin className="w-3.5 h-3.5" />} label="Alamat">
-        <p className="text-sm leading-snug">{address || "—"}</p>
+        <p className="text-sm font-medium leading-snug">{shortAddress || "—"}</p>
+        {streetDetail && (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{streetDetail}</p>
+        )}
         <div className="flex flex-wrap gap-1.5 mt-2">
           {loc.googlemap_link && (
             <a
@@ -367,14 +375,16 @@ const BrandDetailPage = () => {
     distanceKm: number;
     nearLat: number;
     nearLon: number;
+    nearCity: string | null;
+    nearState: string | null;
   };
   const nearbyBrands: NearbyBrand[] = [];
   if (currentCoords.length > 0) {
     for (const other of allBrands) {
       if (other.brand_id === brand.brand_id) continue;
       let minDist = Infinity;
-      let nearLat = 0,
-        nearLon = 0;
+      let nearLat = 0, nearLon = 0;
+      let nearCity: string | null = null, nearState: string | null = null;
       for (const ol of other.Locations) {
         const olat = parseFloat(ol.latitude ?? "");
         const olon = parseFloat(ol.longitude ?? "");
@@ -385,11 +395,13 @@ const BrandDetailPage = () => {
             minDist = d;
             nearLat = olat;
             nearLon = olon;
+            nearCity = ol.city ?? null;
+            nearState = ol.state ?? null;
           }
         }
       }
       if (minDist <= NEARBY_RADIUS_KM) {
-        nearbyBrands.push({ brand: other, distanceKm: minDist, nearLat, nearLon });
+        nearbyBrands.push({ brand: other, distanceKm: minDist, nearLat, nearLon, nearCity, nearState });
       }
     }
     nearbyBrands.sort((a, b) => a.distanceKm - b.distanceKm);
@@ -535,6 +547,7 @@ const BrandDetailPage = () => {
                   key={loc.location_id}
                   loc={loc}
                   index={locPage * LOCS_PER_PAGE + i}
+                  total={totalLocs}
                 />
               ))}
             </div>
@@ -619,7 +632,15 @@ const BrandDetailPage = () => {
 
         {/* ── Visit Nearby ─────────────────────────────── */}
         <section>
-          <SectionTitle icon={<Compass className="w-4 h-4" />} title="Visit Nearby (5 km)" />
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="text-muted-foreground"><Compass className="w-4 h-4" /></div>
+              <h2 className="font-display font-semibold text-base">Kedai Berdekatan</h2>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2 mb-3">
+            Brand lokal lain dalam radius 5 km dari lokasi <span className="font-medium text-foreground">{brand.brand_name}</span>.
+          </p>
 
           {currentCoords.length === 0 ? (
             /* Brand has no coordinates — prompt admin to fill them in */
@@ -636,7 +657,9 @@ const BrandDetailPage = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {nearbyBrands.map(({ brand: nb, distanceKm, nearLat, nearLon }) => (
+              {nearbyBrands.map(({ brand: nb, distanceKm, nearLat, nearLon, nearCity, nearState }) => {
+                const locLabel = [nearCity, nearState].filter(Boolean).join(", ");
+                return (
                 <button
                   key={nb.brand_id}
                   onClick={() => navigate(`/brand/${nb.brand_id}`)}
@@ -646,10 +669,10 @@ const BrandDetailPage = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{nb.brand_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {nb.Locations[0]?.city ? `${nb.Locations[0].city} · ` : ""}
+                      {locLabel ? `${locLabel} · ` : ""}
                       {distanceKm < 1
-                        ? `${Math.round(distanceKm * 1000)} m dari sini`
-                        : `${distanceKm.toFixed(1)} km dari sini`}
+                        ? `${Math.round(distanceKm * 1000)} m`
+                        : `${distanceKm.toFixed(1)} km`}
                     </p>
                   </div>
                   <a
@@ -662,7 +685,8 @@ const BrandDetailPage = () => {
                     <Navigation className="w-3 h-3" /> Maps
                   </a>
                 </button>
-              ))}
+              );
+              })}
             </div>
           )}
         </section>
