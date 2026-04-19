@@ -10,6 +10,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { BrandWithDetails, DBLocation } from "@/lib/database.types";
 import { DAYS_OF_WEEK } from "@/lib/database.types";
+import LocationMap from "@/components/LocationMap";
 
 // ── Haversine distance (km) ───────────────────────────────────────────────────
 
@@ -444,10 +445,10 @@ const BrandDetailPage = () => {
               <span
                 title={
                   brand.price_range === "$"
-                    ? "RM0 – 50.99"
+                    ? "RM0 – 99.99"
                     : brand.price_range === "$$"
-                    ? "RM51 – 99.99"
-                    : "RM100+"
+                    ? "RM100 – 199.99"
+                    : "RM200+"
                 }
                 className="text-[11px] px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-semibold cursor-help"
               >
@@ -541,7 +542,16 @@ const BrandDetailPage = () => {
               title={`Lokasi Fizikal${totalLocs > 1 ? ` (${totalLocs})` : ""}`}
             />
 
-            <div className={`grid gap-3 ${locGridClass}`}>
+            <LocationMap
+              brand={brand}
+              color="#60a5fa"
+              onLocSelect={(loc) => {
+                const idx = brand.Locations.findIndex((l) => l.location_id === loc.location_id);
+                if (idx >= 0) setLocPage(Math.floor(idx / LOCS_PER_PAGE));
+              }}
+            />
+
+            <div className={`grid gap-3 mt-4 ${locGridClass}`}>
               {paginatedLocs.map((loc, i) => (
                 <LocationCard
                   key={loc.location_id}

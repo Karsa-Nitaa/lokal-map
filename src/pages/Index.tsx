@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { MALAYSIAN_STATES } from "@/lib/database.types";
 import type { BrandWithDetails } from "@/lib/database.types";
 import BrandCard from "@/components/BrandCard";
+import IndexMap from "@/components/IndexMap";
 import heroBanner from "@/assets/hero-banner.jpg";
 
 async function fetchAllBrands(): Promise<BrandWithDetails[]> {
@@ -120,6 +121,8 @@ const Index = () => {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
+        <IndexMap brands={allBrands} />
+
         {/* Category picker */}
         <section className="mb-8">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Kategori</p>
