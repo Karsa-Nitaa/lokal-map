@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -7,6 +7,7 @@ import {
   MessageSquarePlus, Lock, Package, Globe, Link as LinkIcon,
   Compass, Instagram, ChevronLeft, ChevronRight,
 } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 import { supabase } from "@/lib/supabase";
 import type { BrandWithDetails, DBLocation } from "@/lib/database.types";
 import { DAYS_OF_WEEK } from "@/lib/database.types";
@@ -287,6 +288,12 @@ const BrandDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [locPage, setLocPage] = useState(0);
+  const [focusedLoc, setFocusedLoc] = useState<DBLocation | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    supabase.from("BrandView").insert({ brand_id: Number(id) });
+  }, [id]);
 
   const { data: brand, isLoading } = useQuery({
     queryKey: ["brand", id],
@@ -408,8 +415,43 @@ const BrandDetailPage = () => {
     nearbyBrands.sort((a, b) => a.distanceKm - b.distanceKm);
   }
 
+  const brandUrl = `https://lokal-map.vercel.app/brand/${brand.brand_id}`;
+  const pageTitle = `${brand.brand_name} | Lokal-Map`;
+  const pageDesc = brand.brand_description
+    ? `${brand.brand_description.slice(0, 140)} — Temui ${brand.brand_name} di Lokal-Map.`
+    : `Terokai ${brand.brand_name} — brand lokal Malaysia di Lokal-Map.`;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": brand.Locations.length > 0 ? "LocalBusiness" : "Organization",
+    "name": brand.brand_name,
+    "description": brand.brand_description ?? undefined,
+    "url": brandUrl,
+    ...(brand.Locations[0] && {
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": brand.Locations[0].city ?? undefined,
+        "addressRegion": brand.Locations[0].state ?? undefined,
+        "addressCountry": "MY",
+      },
+    }),
+    ...(brand.Online?.[0]?.instagram_link && { "sameAs": [brand.Online[0].instagram_link] }),
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDesc} />
+        <meta name="keywords" content={`${brand.brand_name}, brand lokal malaysia, lokal map, ${brand.brand_category ?? ""}`} />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDesc} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={brandUrl} />
+        <link rel="canonical" href={brandUrl} />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
+
       {/* Top bar */}
       <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-md border-b border-border">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -542,48 +584,29 @@ const BrandDetailPage = () => {
               title={`Lokasi Fizikal${totalLocs > 1 ? ` (${totalLocs})` : ""}`}
             />
 
-            <LocationMap
-              brand={brand}
-              color="#60a5fa"
-              onLocSelect={(loc) => {
-                const idx = brand.Locations.findIndex((l) => l.location_id === loc.location_id);
-                if (idx >= 0) setLocPage(Math.floor(idx / LOCS_PER_PAGE));
-              }}
-            />
-
-            <div className={`grid gap-3 mt-4 ${locGridClass}`}>
-              {paginatedLocs.map((loc, i) => (
-                <LocationCard
-                  key={loc.location_id}
-                  loc={loc}
-                  index={locPage * LOCS_PER_PAGE + i}
-                  total={totalLocs}
-                />
-              ))}
-            </div>
-
-            {/* Pagination — only when > LOCS_PER_PAGE */}
-            {totalLocPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-4">
-                <button
-                  onClick={() => setLocPage((p) => Math.max(0, p - 1))}
-                  disabled={locPage === 0}
-                  className="w-8 h-8 rounded-lg border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="text-xs text-muted-foreground">
-                  {locPage + 1} / {totalLocPages}
-                </span>
-                <button
-                  onClick={() => setLocPage((p) => Math.min(totalLocPages - 1, p + 1))}
-                  disabled={locPage === totalLocPages - 1}
-                  className="w-8 h-8 rounded-lg border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+            <div className="flex gap-0 rounded-2xl overflow-hidden border border-border h-[460px]">
+              {/* Left: scrollable location list */}
+              <div className="w-[45%] overflow-y-auto bg-card border-r border-border flex flex-col gap-2 p-3">
+                {brand.Locations.map((loc, i) => (
+                  <button
+                    key={loc.location_id}
+                    onClick={() => setFocusedLoc(loc)}
+                    className={`w-full text-left rounded-xl ring-2 transition-all duration-200 ${
+                      focusedLoc?.location_id === loc.location_id
+                        ? "ring-primary"
+                        : "ring-transparent hover:ring-border"
+                    }`}
+                  >
+                    <LocationCard loc={loc} index={i} total={totalLocs} />
+                  </button>
+                ))}
               </div>
-            )}
+
+              {/* Right: map */}
+              <div className="flex-1 h-full">
+                <LocationMap brand={brand} color="#60a5fa" focusedLoc={focusedLoc} />
+              </div>
+            </div>
           </section>
         )}
 

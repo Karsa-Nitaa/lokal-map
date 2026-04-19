@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import BrandFormPage from "./pages/admin/BrandFormPage";
+import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
 import AdminGuard from "./components/AdminGuard";
 import { AuthProvider } from "./contexts/AuthContext";
 
@@ -49,6 +50,14 @@ const App = () => (
               element={
                 <AdminGuard>
                   <BrandFormPage />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/analytics"
+              element={
+                <AdminGuard>
+                  <AdminAnalyticsPage />
                 </AdminGuard>
               }
             />

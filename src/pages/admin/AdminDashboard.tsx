@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, LogOut, MapPin, Package, Globe, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, MapPin, Package, Globe, ExternalLink, BarChart2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -74,6 +74,15 @@ export default function AdminDashboard() {
             <p className="text-[11px] text-muted-foreground">Admin Panel</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() => navigate("/admin/analytics")}
+            >
+              <BarChart2 className="w-3.5 h-3.5 mr-1.5" />
+              Analytics
+            </Button>
             <Button
               variant="outline"
               size="sm"

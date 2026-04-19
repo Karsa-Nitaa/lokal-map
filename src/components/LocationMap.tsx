@@ -5,24 +5,33 @@ import type { BrandWithDetails, DBLocation } from "@/lib/database.types";
 
 const GMAP_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
 
-function makeSvgMarker(color: string, size = 18) {
+function makePinMarker(color: string) {
+  const w = 22;
+  const h = 30;
+  const cx = w / 2;
+  const r = cx;
   const svg = encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 2}" fill="${color}" stroke="white" stroke-width="2.5"/></svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <path d="M${cx} 0 C${cx * 0.1} 0 0 ${r * 0.9} 0 ${r} C0 ${r * 1.75} ${cx} ${h} ${cx} ${h} C${cx} ${h} ${w} ${r * 1.75} ${w} ${r} C${w} ${r * 0.9} ${cx * 1.9} 0 ${cx} 0Z"
+        fill="${color}" stroke="white" stroke-width="2"/>
+      <circle cx="${cx}" cy="${r}" r="${r * 0.38}" fill="white" fill-opacity="0.75"/>
+    </svg>`
   );
   return {
     url: `data:image/svg+xml;charset=UTF-8,${svg}`,
-    scaledSize: new google.maps.Size(size, size),
-    anchor: new google.maps.Point(size / 2, size / 2),
+    scaledSize: new google.maps.Size(w, h),
+    anchor: new google.maps.Point(cx, h),
   };
 }
 
 interface Props {
   brand: BrandWithDetails;
   color?: string;
+  focusedLoc?: DBLocation | null;
   onLocSelect?: (loc: DBLocation) => void;
 }
 
-const LocationMap = ({ brand, color = "#60a5fa", onLocSelect }: Props) => {
+const LocationMap = ({ brand, color = "#60a5fa", focusedLoc, onLocSelect }: Props) => {
   const { isLoaded, loadError } = useJsApiLoader({ googleMapsApiKey: GMAP_KEY });
 
   const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
@@ -30,10 +39,6 @@ const LocationMap = ({ brand, color = "#60a5fa", onLocSelect }: Props) => {
   const [locating, setLocating] = useState(false);
 
   const locs = (brand.Locations ?? []).filter((l) => l.latitude && l.longitude);
-  if (locs.length === 0 || loadError) return null;
-
-  const avgLat = locs.reduce((s, l) => s + parseFloat(l.latitude!), 0) / locs.length;
-  const avgLng = locs.reduce((s, l) => s + parseFloat(l.longitude!), 0) / locs.length;
 
   const onLoad = useCallback(
     (map: google.maps.Map) => {
@@ -46,6 +51,18 @@ const LocationMap = ({ brand, color = "#60a5fa", onLocSelect }: Props) => {
     },
     [locs]
   );
+
+  useEffect(() => {
+    if (!mapRef || !focusedLoc?.latitude || !focusedLoc?.longitude) return;
+    mapRef.panTo({ lat: parseFloat(focusedLoc.latitude), lng: parseFloat(focusedLoc.longitude) });
+    mapRef.setZoom(15);
+    setPopup(focusedLoc);
+  }, [focusedLoc, mapRef]);
+
+  if (locs.length === 0 || loadError) return null;
+
+  const avgLat = locs.reduce((s, l) => s + parseFloat(l.latitude!), 0) / locs.length;
+  const avgLng = locs.reduce((s, l) => s + parseFloat(l.longitude!), 0) / locs.length;
 
   const handleLocate = () => {
     if (!mapRef || !navigator.geolocation) return;
@@ -70,7 +87,7 @@ const LocationMap = ({ brand, color = "#60a5fa", onLocSelect }: Props) => {
   };
 
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-border" style={{ height: "288px" }}>
+    <div className="relative w-full h-full overflow-hidden">
       {!isLoaded ? (
         <div className="flex items-center justify-center h-full bg-muted/30 text-sm text-muted-foreground">
           Memuatkan peta...
@@ -87,21 +104,29 @@ const LocationMap = ({ brand, color = "#60a5fa", onLocSelect }: Props) => {
             <Marker
               key={loc.location_id}
               position={{ lat: parseFloat(loc.latitude!), lng: parseFloat(loc.longitude!) }}
-              icon={makeSvgMarker(color, 20)}
+              icon={makePinMarker(color)}
               onClick={() => handleMarkerClick(loc)}
             />
           ))}
 
-          {popup && (
+          {popup?.latitude && popup?.longitude && (
             <InfoWindow
-              position={{ lat: parseFloat(popup.latitude!), lng: parseFloat(popup.longitude!) }}
+              position={{ lat: parseFloat(popup.latitude), lng: parseFloat(popup.longitude) }}
               onCloseClick={() => setPopup(null)}
+              options={{ pixelOffset: new google.maps.Size(0, -30) }}
             >
-              <div>
-                <p style={{ fontWeight: 600, fontSize: "13px", marginBottom: "2px" }}>{brand.brand_name}</p>
-                <p style={{ fontSize: "11px", color: "#6b7280" }}>
-                  {[popup.city, popup.state].filter(Boolean).join(", ")}
-                </p>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", minWidth: "130px" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 700, fontSize: "13px", margin: "0 0 2px", color: "#111" }}>
+                    {brand.brand_name}
+                  </p>
+                  {(popup.city || popup.state) && (
+                    <p style={{ fontSize: "11px", color: "#6b7280", margin: 0 }}>
+                      {[popup.city, popup.state].filter(Boolean).join(", ")}
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => setPopup(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0, fontSize: "14px", lineHeight: 1, marginTop: "1px" }}>✕</button>
               </div>
             </InfoWindow>
           )}

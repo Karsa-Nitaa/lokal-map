@@ -18,14 +18,22 @@ function buildColorMap(brands: BrandWithDetails[]): Map<number, string> {
   return map;
 }
 
-function makeSvgMarker(color: string, size = 18) {
+function makePinMarker(color: string, selected = false) {
+  const w = selected ? 26 : 20;
+  const h = selected ? 36 : 28;
+  const cx = w / 2;
+  const r = cx;
   const svg = encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 2}" fill="${color}" stroke="white" stroke-width="2.5"/></svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <path d="M${cx} 0 C${cx * 0.1} 0 0 ${r * 0.9} 0 ${r} C0 ${r * 1.75} ${cx} ${h} ${cx} ${h} C${cx} ${h} ${w} ${r * 1.75} ${w} ${r} C${w} ${r * 0.9} ${cx * 1.9} 0 ${cx} 0Z"
+        fill="${color}" stroke="white" stroke-width="2"/>
+      <circle cx="${cx}" cy="${r}" r="${r * 0.38}" fill="white" fill-opacity="0.75"/>
+    </svg>`
   );
   return {
     url: `data:image/svg+xml;charset=UTF-8,${svg}`,
-    scaledSize: new google.maps.Size(size, size),
-    anchor: new google.maps.Point(size / 2, size / 2),
+    scaledSize: new google.maps.Size(w, h),
+    anchor: new google.maps.Point(cx, h),
   };
 }
 
@@ -55,16 +63,27 @@ const IndexMap = ({ brands }: Props) => {
   );
   const colorMap = buildColorMap(physicalBrands);
 
-  const onLoad = useCallback((map: google.maps.Map) => setMapRef(map), []);
+  const onLoad = useCallback(
+    (map: google.maps.Map) => {
+      setMapRef(map);
+      const allLocs = physicalBrands.flatMap((b) =>
+        (b.Locations ?? []).filter((l) => l.latitude && l.longitude)
+      );
+      if (allLocs.length > 1) {
+        const bounds = new google.maps.LatLngBounds();
+        allLocs.forEach((l) => bounds.extend({ lat: parseFloat(l.latitude!), lng: parseFloat(l.longitude!) }));
+        map.fitBounds(bounds, 40);
+      }
+    },
+    [physicalBrands]
+  );
 
-  // Fly to selected brand
   useEffect(() => {
     if (!mapRef || !selectedId) return;
     const brand = physicalBrands.find((b) => b.brand_id === selectedId);
     if (!brand) return;
     const locs = (brand.Locations ?? []).filter((l) => l.latitude && l.longitude);
     if (!locs.length) return;
-
     if (locs.length === 1) {
       mapRef.panTo({ lat: parseFloat(locs[0].latitude!), lng: parseFloat(locs[0].longitude!) });
       mapRef.setZoom(13);
@@ -75,7 +94,6 @@ const IndexMap = ({ brands }: Props) => {
     }
   }, [selectedId, mapRef, physicalBrands]);
 
-  // Scroll list to selected brand
   useEffect(() => {
     if (!selectedId || !listRef.current) return;
     const el = listRef.current.querySelector<HTMLElement>(`[data-bid="${selectedId}"]`);
@@ -105,9 +123,7 @@ const IndexMap = ({ brands }: Props) => {
   return (
     <section className="mb-8">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Peta Lokal Brand
-        </p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Peta Lokal Brand</p>
         <span className="text-xs text-muted-foreground">{physicalBrands.length} brand fizikal</span>
       </div>
 
@@ -130,14 +146,9 @@ const IndexMap = ({ brands }: Props) => {
                   key={brand.brand_id}
                   data-bid={brand.brand_id}
                   onClick={() => toggle(brand.brand_id)}
-                  className={`w-full text-left px-4 py-3 border-b border-border/50 transition-colors hover:bg-muted/40 flex items-center gap-3 ${
-                    isSelected ? "bg-muted/60" : ""
-                  }`}
+                  className={`w-full text-left px-4 py-3 border-b border-border/50 transition-colors hover:bg-muted/40 flex items-center gap-3 ${isSelected ? "bg-muted/60" : ""}`}
                 >
-                  <div
-                    className="w-3 h-3 rounded-full shrink-0 border-2 border-white shadow-sm"
-                    style={{ background: color }}
-                  />
+                  <div className="w-3 h-3 rounded-full shrink-0 border-2 border-white shadow-sm" style={{ background: color }} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold truncate leading-tight">{brand.brand_name}</p>
                     <p className="text-xs text-muted-foreground truncate">
@@ -159,10 +170,10 @@ const IndexMap = ({ brands }: Props) => {
           ) : (
             <GoogleMap
               mapContainerStyle={{ width: "100%", height: "100%" }}
-              center={{ lat: 4.5, lng: 109.0 }}
-              zoom={6}
+              center={{ lat: 3.9, lng: 108.0 }}
+              zoom={5}
               onLoad={onLoad}
-              options={{ disableDefaultUI: false, zoomControl: true, mapTypeControl: false, streetViewControl: false, fullscreenControl: false }}
+              options={{ zoomControl: true, mapTypeControl: false, streetViewControl: false, fullscreenControl: false }}
             >
               {physicalBrands.map((brand) => {
                 const color = colorMap.get(brand.brand_id)!;
@@ -173,7 +184,7 @@ const IndexMap = ({ brands }: Props) => {
                   <Marker
                     key={`${brand.brand_id}-${loc.location_id}`}
                     position={{ lat: parseFloat(loc.latitude!), lng: parseFloat(loc.longitude!) }}
-                    icon={makeSvgMarker(color, isSelected ? 22 : 16)}
+                    icon={makePinMarker(color, isSelected)}
                     zIndex={isSelected ? 10 : 1}
                     onClick={() => {
                       toggle(brand.brand_id);
@@ -191,18 +202,26 @@ const IndexMap = ({ brands }: Props) => {
                   <InfoWindow
                     position={{ lat: popup.lat, lng: popup.lng }}
                     onCloseClick={() => setPopup(null)}
+                    options={{ pixelOffset: new google.maps.Size(0, -30) }}
                   >
-                    <div style={{ minWidth: "130px" }}>
-                      <p style={{ fontWeight: 600, fontSize: "13px", marginBottom: "2px" }}>{brand.brand_name}</p>
-                      <p style={{ fontSize: "11px", color: "#6b7280" }}>
-                        {[loc.city, loc.state].filter(Boolean).join(", ")}
-                      </p>
-                      <button
-                        onClick={() => navigate(`/brand/${brand.brand_id}`)}
-                        style={{ marginTop: "6px", fontSize: "11px", color: "#2563eb", cursor: "pointer", background: "none", border: "none", padding: 0 }}
-                      >
-                        Lihat profil →
-                      </button>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", minWidth: "150px" }}>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontWeight: 700, fontSize: "13px", margin: "0 0 2px", color: "#111" }}>
+                          {brand.brand_name}
+                        </p>
+                        {(loc.city || loc.state) && (
+                          <p style={{ fontSize: "11px", color: "#6b7280", margin: "0 0 6px" }}>
+                            {[loc.city, loc.state].filter(Boolean).join(", ")}
+                          </p>
+                        )}
+                        <button
+                          onClick={() => navigate(`/brand/${brand.brand_id}`)}
+                          style={{ fontSize: "11px", color: "#2563eb", cursor: "pointer", background: "none", border: "none", padding: 0, fontWeight: 600 }}
+                        >
+                          Lihat profil →
+                        </button>
+                      </div>
+                      <button onClick={() => setPopup(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0, fontSize: "14px", lineHeight: 1, marginTop: "1px" }}>✕</button>
                     </div>
                   </InfoWindow>
                 );
@@ -210,7 +229,6 @@ const IndexMap = ({ brands }: Props) => {
             </GoogleMap>
           )}
 
-          {/* Locate me button */}
           <button
             onClick={handleLocate}
             disabled={locating}

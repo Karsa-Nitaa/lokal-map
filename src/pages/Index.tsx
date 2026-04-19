@@ -7,6 +7,7 @@ import type { Category } from "@/data/brands";
 import { supabase } from "@/lib/supabase";
 import { MALAYSIAN_STATES } from "@/lib/database.types";
 import type { BrandWithDetails } from "@/lib/database.types";
+import { Helmet } from "react-helmet-async";
 import BrandCard from "@/components/BrandCard";
 import IndexMap from "@/components/IndexMap";
 import heroBanner from "@/assets/hero-banner.jpg";
@@ -92,6 +93,28 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Lokal-Map — Direktori Brand Lokal Malaysia</title>
+        <meta name="description" content="Jumpa brand lokal Malaysia — pakaian, bakeri, kafe, perkhidmatan tempatan & lebih. Terokai kedai fizikal dan online dalam satu direktori." />
+        <meta name="keywords" content="brand lokal malaysia, lokal map, kedai lokal malaysia, fashion lokal, home bakery malaysia, kafe lokal, lokal-map" />
+        <meta property="og:title" content="Lokal-Map — Direktori Brand Lokal Malaysia" />
+        <meta property="og:description" content="Direktori brand lokal Malaysia. Cari pakaian, bakeri, kafe & lebih. Support local!" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://lokal-map.vercel.app" />
+        <link rel="canonical" href="https://lokal-map.vercel.app" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "Lokal-Map",
+          "url": "https://lokal-map.vercel.app",
+          "description": "Direktori brand lokal Malaysia",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://lokal-map.vercel.app?search={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        })}</script>
+      </Helmet>
       {/* Hero */}
       <header className="relative h-[55vh] min-h-[380px] flex items-center justify-center overflow-hidden">
         <img
