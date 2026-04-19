@@ -267,9 +267,7 @@ function LocationDialog({
       }
     } catch (e) {
       // fetch itself threw → likely CORS or backend not reachable
-      const msg = e instanceof TypeError
-        ? `Tak dapat reach backend (${BACKEND_URL}). Pastikan backend running & CORS ok.`
-        : "Gagal auto-detect. Isi koordinat manual.";
+      const msg = "Auto-detect tidak available. Sila isi koordinat manual.";
       setDetectMsg({ type: "err", text: msg });
     } finally {
       setDetecting(false);
