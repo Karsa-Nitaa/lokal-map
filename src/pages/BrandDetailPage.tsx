@@ -126,23 +126,31 @@ function OperationHours({ hours }: { hours: Record<string, string> | null }) {
 
 // ── Location card ─────────────────────────────────────────────────────────────
 
-const LocationCard = ({ loc, index }: { loc: DBLocation; index: number }) => {
-  const address = [loc.lot_number, loc.street_address, loc.city, loc.postal_code, loc.state]
+const LocationCard = ({ loc, index, total }: { loc: DBLocation; index: number; total: number }) => {
+  // Primary: city + state — short, scannable
+  const shortAddress = [loc.city, loc.state].filter(Boolean).join(", ");
+  // Secondary: street details — shown small below
+  const streetDetail = [loc.lot_number, loc.street_address, loc.postal_code]
     .filter(Boolean)
     .join(", ");
   const paymentList = loc.payment_methods
     ? loc.payment_methods.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
 
+  // Always label: "Lokasi" when only 1 store, "Lokasi 1 / 2 / …" when multiple
+  const locLabel = total === 1 ? "Lokasi" : `Lokasi ${index + 1}`;
+
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3 h-full">
-      {/* Location number pill */}
-      {index > 0 && (
-        <div className="text-[11px] font-semibold text-muted-foreground">Lokasi {index + 1}</div>
-      )}
+      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+        {locLabel}
+      </div>
 
       <InfoRow icon={<MapPin className="w-3.5 h-3.5" />} label="Alamat">
-        <p className="text-sm leading-snug">{address || "—"}</p>
+        <p className="text-sm font-medium leading-snug">{shortAddress || "—"}</p>
+        {streetDetail && (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{streetDetail}</p>
+        )}
         <div className="flex flex-wrap gap-1.5 mt-2">
           {loc.googlemap_link && (
             <a
@@ -251,99 +259,6 @@ function SocialLink({ href, label }: { href: string; label: string }) {
         <p className="text-xs text-primary truncate">{href}</p>
       </div>
     </a>
-  );
-}
-
-// ── Instagram Preview component ───────────────────────────────────────────────
-// Calls the backend API. If no token is configured it falls back to a placeholder.
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3001";
-
-type IGMedia = {
-  id: string;
-  media_url: string;
-  thumbnail_url?: string;
-  permalink: string;
-  caption?: string;
-  media_type: string;
-};
-
-async function fetchIGFeed(brandId: number): Promise<IGMedia[]> {
-  const res = await fetch(
-    `${BACKEND_URL}/api/instagram-feed?brandId=${brandId}&limit=3`
-  );
-  if (!res.ok) throw new Error("feed unavailable");
-  const json = await res.json();
-  return json.media ?? [];
-}
-
-function InstagramPreview({ igLink, brandId }: { igLink: string; brandId: number }) {
-  const { data: posts, isLoading, isError } = useQuery({
-    queryKey: ["ig-feed", brandId],
-    queryFn: () => fetchIGFeed(brandId),
-    retry: false,
-    staleTime: 10 * 60 * 1000,
-  });
-
-  return (
-    <section>
-      <SectionTitle icon={<Instagram className="w-4 h-4" />} title="Instagram Preview" />
-
-      {isLoading ? (
-        <div className="grid grid-cols-3 gap-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="aspect-square rounded-xl bg-muted animate-pulse" />
-          ))}
-        </div>
-      ) : !isError && posts && posts.length > 0 ? (
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            {posts.map((post) => (
-              <a
-                key={post.id}
-                href={post.permalink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group aspect-square rounded-xl overflow-hidden border border-border"
-              >
-                <img
-                  src={post.media_type === "VIDEO" ? (post.thumbnail_url ?? post.media_url) : post.media_url}
-                  alt={post.caption?.slice(0, 60) ?? "Instagram post"}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-              </a>
-            ))}
-          </div>
-          <a
-            href={igLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Instagram className="w-3.5 h-3.5" /> Lihat semua di Instagram
-          </a>
-        </div>
-      ) : (
-        /* Backend not configured / token missing — show placeholder */
-        <div className="rounded-xl border-2 border-dashed border-border bg-muted/20 p-5 text-center space-y-3">
-          <Instagram className="w-6 h-6 text-muted-foreground mx-auto" />
-          <div>
-            <p className="text-sm font-semibold">Feed Preview</p>
-            <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-              Admin perlu konfigur Instagram token dalam backend untuk aktifkan preview ini.
-            </p>
-          </div>
-          <a
-            href={igLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium hover:opacity-90 transition-opacity"
-          >
-            <Instagram className="w-3.5 h-3.5" /> Lihat di Instagram
-          </a>
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -460,14 +375,16 @@ const BrandDetailPage = () => {
     distanceKm: number;
     nearLat: number;
     nearLon: number;
+    nearCity: string | null;
+    nearState: string | null;
   };
   const nearbyBrands: NearbyBrand[] = [];
   if (currentCoords.length > 0) {
     for (const other of allBrands) {
       if (other.brand_id === brand.brand_id) continue;
       let minDist = Infinity;
-      let nearLat = 0,
-        nearLon = 0;
+      let nearLat = 0, nearLon = 0;
+      let nearCity: string | null = null, nearState: string | null = null;
       for (const ol of other.Locations) {
         const olat = parseFloat(ol.latitude ?? "");
         const olon = parseFloat(ol.longitude ?? "");
@@ -478,11 +395,13 @@ const BrandDetailPage = () => {
             minDist = d;
             nearLat = olat;
             nearLon = olon;
+            nearCity = ol.city ?? null;
+            nearState = ol.state ?? null;
           }
         }
       }
       if (minDist <= NEARBY_RADIUS_KM) {
-        nearbyBrands.push({ brand: other, distanceKm: minDist, nearLat, nearLon });
+        nearbyBrands.push({ brand: other, distanceKm: minDist, nearLat, nearLon, nearCity, nearState });
       }
     }
     nearbyBrands.sort((a, b) => a.distanceKm - b.distanceKm);
@@ -592,7 +511,26 @@ const BrandDetailPage = () => {
 
         {/* ── Instagram Feed Preview ───────────────────── */}
         {onlineData?.instagram_link && (
-          <InstagramPreview igLink={onlineData.instagram_link} brandId={brand.brand_id} />
+          <section>
+            <SectionTitle icon={<Instagram className="w-4 h-4" />} title="Instagram Preview" />
+            <div className="rounded-xl border-2 border-dashed border-border bg-muted/20 p-5 flex flex-col items-center gap-3 text-center">
+              <Instagram className="w-5 h-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-semibold">Coming Soon</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                  Preview feed Instagram akan diaktifkan tidak lama lagi.
+                </p>
+              </div>
+              <a
+                href={onlineData.instagram_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium hover:opacity-90 transition-opacity"
+              >
+                <Instagram className="w-3.5 h-3.5" /> Lihat di Instagram
+              </a>
+            </div>
+          </section>
         )}
 
         {/* ── Physical Locations ───────────────────────── */}
@@ -609,6 +547,7 @@ const BrandDetailPage = () => {
                   key={loc.location_id}
                   loc={loc}
                   index={locPage * LOCS_PER_PAGE + i}
+                  total={totalLocs}
                 />
               ))}
             </div>
@@ -693,7 +632,15 @@ const BrandDetailPage = () => {
 
         {/* ── Visit Nearby ─────────────────────────────── */}
         <section>
-          <SectionTitle icon={<Compass className="w-4 h-4" />} title="Visit Nearby (5 km)" />
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="text-muted-foreground"><Compass className="w-4 h-4" /></div>
+              <h2 className="font-display font-semibold text-base">Kedai Berdekatan</h2>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2 mb-3">
+            Brand lokal lain dalam radius 5 km dari lokasi <span className="font-medium text-foreground">{brand.brand_name}</span>.
+          </p>
 
           {currentCoords.length === 0 ? (
             /* Brand has no coordinates — prompt admin to fill them in */
@@ -710,7 +657,9 @@ const BrandDetailPage = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {nearbyBrands.map(({ brand: nb, distanceKm, nearLat, nearLon }) => (
+              {nearbyBrands.map(({ brand: nb, distanceKm, nearLat, nearLon, nearCity, nearState }) => {
+                const locLabel = [nearCity, nearState].filter(Boolean).join(", ");
+                return (
                 <button
                   key={nb.brand_id}
                   onClick={() => navigate(`/brand/${nb.brand_id}`)}
@@ -720,10 +669,10 @@ const BrandDetailPage = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{nb.brand_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {nb.Locations[0]?.city ? `${nb.Locations[0].city} · ` : ""}
+                      {locLabel ? `${locLabel} · ` : ""}
                       {distanceKm < 1
-                        ? `${Math.round(distanceKm * 1000)} m dari sini`
-                        : `${distanceKm.toFixed(1)} km dari sini`}
+                        ? `${Math.round(distanceKm * 1000)} m`
+                        : `${distanceKm.toFixed(1)} km`}
                     </p>
                   </div>
                   <a
@@ -736,7 +685,8 @@ const BrandDetailPage = () => {
                     <Navigation className="w-3 h-3" /> Maps
                   </a>
                 </button>
-              ))}
+              );
+              })}
             </div>
           )}
         </section>

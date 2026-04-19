@@ -36,7 +36,7 @@ async function deleteBrand(brand_id: number) {
 }
 
 const CATEGORY_BADGE: Record<string, string> = {
-  clothing: "Clothing",
+  clothing: "Fashion",
   "local-service": "Local Service",
   "home-bakery": "Home Bakery",
   cafe: "Cafe",

@@ -54,7 +54,7 @@ import { DAYS_OF_WEEK, MALAYSIAN_STATES } from "@/lib/database.types";
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
 const BRAND_CATEGORIES = [
-  { value: "clothing", label: "Clothing" },
+  { value: "clothing", label: "Fashion" },
   { value: "local-service", label: "Local Service" },
   { value: "home-bakery", label: "Home Bakery" },
   { value: "cafe", label: "Cafe" },

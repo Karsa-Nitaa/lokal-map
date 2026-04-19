@@ -37,7 +37,7 @@ export interface Brand {
 }
 
 export const CATEGORIES = [
-  { id: "clothing" as Category, label: "Clothing", emoji: "👗", available: true },
+  { id: "clothing" as Category, label: "Fashion", emoji: "🛍️", available: true },
   { id: "local-service" as Category, label: "Local Service", emoji: "🎨", available: false },
   { id: "home-bakery" as Category, label: "Home Bakery", emoji: "🧁", available: false },
   { id: "cafe" as Category, label: "Cafe", emoji: "☕", available: false },
