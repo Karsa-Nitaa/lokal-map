@@ -291,7 +291,7 @@ const BrandDetailPage = () => {
   const [focusedLoc, setFocusedLoc] = useState<DBLocation | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || window.location.hostname === "localhost") return;
     supabase.from("BrandView").insert({ brand_id: Number(id) });
   }, [id]);
 
