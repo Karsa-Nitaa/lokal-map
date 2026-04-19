@@ -164,23 +164,6 @@ export default function AdminAnalyticsPage() {
             </ResponsiveContainer>
           )}
         </div>
-
-        {/* Setup note */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 text-sm">
-          <p className="font-semibold text-amber-800 dark:text-amber-400 mb-1">Setup diperlukan</p>
-          <p className="text-amber-700 dark:text-amber-500 text-xs leading-relaxed">
-            Jalankan SQL ini di Supabase SQL Editor untuk aktifkan tracking:
-          </p>
-          <pre className="mt-2 text-xs bg-amber-100 dark:bg-amber-900/40 rounded-lg p-3 overflow-x-auto text-amber-900 dark:text-amber-300">{`CREATE TABLE IF NOT EXISTS "BrandView" (
-  id BIGSERIAL PRIMARY KEY,
-  brand_id INTEGER REFERENCES "Brand"(brand_id) ON DELETE CASCADE,
-  viewed_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE "BrandView" ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "anon_insert" ON "BrandView" FOR INSERT TO anon WITH CHECK (true);
-CREATE POLICY "admin_select" ON "BrandView" FOR SELECT TO authenticated USING (true);`}</pre>
-        </div>
-
       </main>
     </div>
   );
