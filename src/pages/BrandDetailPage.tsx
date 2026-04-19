@@ -292,7 +292,9 @@ const BrandDetailPage = () => {
 
   useEffect(() => {
     if (!id || window.location.hostname === "localhost") return;
-    supabase.from("BrandView").insert({ brand_id: Number(id) }).then(() => {});
+    supabase.from("BrandView").insert({ brand_id: Number(id) }).then(({ error }) => {
+      if (error) console.error("[BrandView]", error);
+    });
   }, [id]);
 
   const { data: brand, isLoading } = useQuery({
