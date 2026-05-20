@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
 import { Locate } from "lucide-react";
 import type { BrandWithDetails, DBLocation } from "@/lib/database.types";
 
 const GMAP_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
 
-function makePinMarker(color: string) {
-  const w = 22;
-  const h = 30;
+function makePin(color: string, label: string, selected = false) {
+  const w = selected ? 30 : 24;
+  const h = selected ? 42 : 34;
   const cx = w / 2;
   const r = cx;
+  const fontSize = selected ? 11 : 9;
   const svg = encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
       <path d="M${cx} 0 C${cx * 0.1} 0 0 ${r * 0.9} 0 ${r} C0 ${r * 1.75} ${cx} ${h} ${cx} ${h} C${cx} ${h} ${w} ${r * 1.75} ${w} ${r} C${w} ${r * 0.9} ${cx * 1.9} 0 ${cx} 0Z"
-        fill="${color}" stroke="white" stroke-width="2"/>
-      <circle cx="${cx}" cy="${r}" r="${r * 0.38}" fill="white" fill-opacity="0.75"/>
+        fill="${color}" stroke="white" stroke-width="2.5"/>
+      <text x="${cx}" y="${r + fontSize * 0.38}" text-anchor="middle" fill="white" font-size="${fontSize}" font-weight="bold" font-family="system-ui,sans-serif">${label}</text>
     </svg>`
   );
   return {
@@ -27,42 +28,42 @@ function makePinMarker(color: string) {
 interface Props {
   brand: BrandWithDetails;
   color?: string;
-  focusedLoc?: DBLocation | null;
-  onLocSelect?: (loc: DBLocation) => void;
+  selectedLocId?: number | null;
+  onLocSelect: (loc: DBLocation) => void;
 }
 
-const LocationMap = ({ brand, color = "#60a5fa", focusedLoc, onLocSelect }: Props) => {
+const LocationMap = ({ brand, color = "#60a5fa", selectedLocId, onLocSelect }: Props) => {
   const { isLoaded, loadError } = useJsApiLoader({ googleMapsApiKey: GMAP_KEY });
-
   const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
-  const [popup, setPopup] = useState<DBLocation | null>(null);
   const [locating, setLocating] = useState(false);
 
   const locs = (brand.Locations ?? []).filter((l) => l.latitude && l.longitude);
+  const multi = locs.length > 1;
 
   const onLoad = useCallback(
     (map: google.maps.Map) => {
       setMapRef(map);
       if (locs.length > 1) {
         const bounds = new google.maps.LatLngBounds();
-        locs.forEach((l) => bounds.extend({ lat: parseFloat(l.latitude!), lng: parseFloat(l.longitude!) }));
-        map.fitBounds(bounds, 40);
+        locs.forEach((l) =>
+          bounds.extend({ lat: parseFloat(l.latitude!), lng: parseFloat(l.longitude!) })
+        );
+        map.fitBounds(bounds, 60);
+      } else if (locs.length === 1) {
+        map.setCenter({ lat: parseFloat(locs[0].latitude!), lng: parseFloat(locs[0].longitude!) });
+        map.setZoom(15);
       }
     },
     [locs]
   );
 
   useEffect(() => {
-    if (!mapRef || !focusedLoc?.latitude || !focusedLoc?.longitude) return;
-    mapRef.panTo({ lat: parseFloat(focusedLoc.latitude), lng: parseFloat(focusedLoc.longitude) });
+    if (!mapRef || !selectedLocId) return;
+    const loc = locs.find((l) => l.location_id === selectedLocId);
+    if (!loc?.latitude || !loc?.longitude) return;
+    mapRef.panTo({ lat: parseFloat(loc.latitude), lng: parseFloat(loc.longitude) });
     mapRef.setZoom(15);
-    setPopup(focusedLoc);
-  }, [focusedLoc, mapRef]);
-
-  if (locs.length === 0 || loadError) return null;
-
-  const avgLat = locs.reduce((s, l) => s + parseFloat(l.latitude!), 0) / locs.length;
-  const avgLng = locs.reduce((s, l) => s + parseFloat(l.longitude!), 0) / locs.length;
+  }, [selectedLocId, mapRef, locs]);
 
   const handleLocate = () => {
     if (!mapRef || !navigator.geolocation) return;
@@ -77,14 +78,7 @@ const LocationMap = ({ brand, color = "#60a5fa", focusedLoc, onLocSelect }: Prop
     );
   };
 
-  const handleMarkerClick = (loc: DBLocation) => {
-    setPopup(loc);
-    if (mapRef) {
-      mapRef.panTo({ lat: parseFloat(loc.latitude!), lng: parseFloat(loc.longitude!) });
-      mapRef.setZoom(14);
-    }
-    onLocSelect?.(loc);
-  };
+  if (locs.length === 0 || loadError) return null;
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -95,41 +89,31 @@ const LocationMap = ({ brand, color = "#60a5fa", focusedLoc, onLocSelect }: Prop
       ) : (
         <GoogleMap
           mapContainerStyle={{ width: "100%", height: "100%" }}
-          center={{ lat: avgLat, lng: avgLng }}
-          zoom={locs.length === 1 ? 14 : 11}
+          center={{ lat: parseFloat(locs[0].latitude!), lng: parseFloat(locs[0].longitude!) }}
+          zoom={15}
           onLoad={onLoad}
-          options={{ zoomControl: true, mapTypeControl: false, streetViewControl: false, fullscreenControl: false }}
+          options={{
+            zoomControl: true,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            gestureHandling: "greedy",
+            clickableIcons: false,
+          }}
         >
-          {locs.map((loc) => (
+          {locs.map((loc, idx) => (
             <Marker
               key={loc.location_id}
               position={{ lat: parseFloat(loc.latitude!), lng: parseFloat(loc.longitude!) }}
-              icon={makePinMarker(color)}
-              onClick={() => handleMarkerClick(loc)}
+              icon={makePin(
+                color,
+                multi ? String(idx + 1) : "●",
+                selectedLocId === loc.location_id
+              )}
+              zIndex={selectedLocId === loc.location_id ? 10 : 1}
+              onClick={() => onLocSelect(loc)}
             />
           ))}
-
-          {popup?.latitude && popup?.longitude && (
-            <InfoWindow
-              position={{ lat: parseFloat(popup.latitude), lng: parseFloat(popup.longitude) }}
-              onCloseClick={() => setPopup(null)}
-              options={{ pixelOffset: new google.maps.Size(0, -30) }}
-            >
-              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", minWidth: "130px" }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 700, fontSize: "13px", margin: "0 0 2px", color: "#111" }}>
-                    {brand.brand_name}
-                  </p>
-                  {(popup.city || popup.state) && (
-                    <p style={{ fontSize: "11px", color: "#6b7280", margin: 0 }}>
-                      {[popup.city, popup.state].filter(Boolean).join(", ")}
-                    </p>
-                  )}
-                </div>
-                <button onClick={() => setPopup(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0, fontSize: "14px", lineHeight: 1, marginTop: "1px" }}>✕</button>
-              </div>
-            </InfoWindow>
-          )}
         </GoogleMap>
       )}
 

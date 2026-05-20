@@ -282,12 +282,9 @@ const GENDER_BADGE: Record<string, string> = {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const LOCS_PER_PAGE = 9;
-
 const BrandDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [locPage, setLocPage] = useState(0);
   const [focusedLoc, setFocusedLoc] = useState<DBLocation | null>(null);
 
   useEffect(() => {
@@ -296,6 +293,12 @@ const BrandDetailPage = () => {
       if (error) console.error("[BrandView]", error);
     });
   }, [id]);
+
+  useEffect(() => {
+    if (!brand) return;
+    const first = brand.Locations.find((l) => l.latitude && l.longitude) ?? brand.Locations[0] ?? null;
+    setFocusedLoc(first);
+  }, [brand]);
 
   const { data: brand, isLoading } = useQuery({
     queryKey: ["brand", id],
@@ -348,19 +351,9 @@ const BrandDetailPage = () => {
     return acc;
   }, null);
 
-  // ── Locations: pagination + responsive grid ───────────────────────────────
+  // ── Locations ─────────────────────────────────────────────────────────────
   const totalLocs = brand.Locations.length;
-  const totalLocPages = Math.ceil(totalLocs / LOCS_PER_PAGE);
-  const paginatedLocs = brand.Locations.slice(
-    locPage * LOCS_PER_PAGE,
-    (locPage + 1) * LOCS_PER_PAGE
-  );
-  const locGridClass =
-    totalLocs === 1
-      ? "grid-cols-1"
-      : totalLocs === 2
-      ? "grid-cols-1 sm:grid-cols-2"
-      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+  const locsWithCoords = brand.Locations.filter((l) => l.latitude && l.longitude);
 
   // ── Products: group by gender ─────────────────────────────────────────────
   const knownGenders = new Set(["lelaki", "perempuan", "unisex"]);
@@ -598,30 +591,59 @@ const BrandDetailPage = () => {
               title={`Lokasi Fizikal${totalLocs > 1 ? ` (${totalLocs})` : ""}`}
             />
 
-            {/* Mobile: stacked. Desktop: side-by-side */}
-            <div className="flex flex-col sm:flex-row gap-0 rounded-2xl overflow-hidden border border-border">
-              {/* Location list */}
-              <div className="sm:w-[45%] overflow-y-auto bg-card sm:border-r border-border border-b sm:border-b-0 flex flex-col gap-2 p-3 max-h-64 sm:max-h-none sm:h-[460px]">
-                {brand.Locations.map((loc, i) => (
-                  <button
-                    key={loc.location_id}
-                    onClick={() => setFocusedLoc(loc)}
-                    className={`w-full text-left rounded-xl ring-2 transition-all duration-200 ${
-                      focusedLoc?.location_id === loc.location_id
-                        ? "ring-primary"
-                        : "ring-transparent hover:ring-border"
-                    }`}
-                  >
-                    <LocationCard loc={loc} index={i} total={totalLocs} />
-                  </button>
-                ))}
+            {/* Map — full width, tap a pin to select a location */}
+            {locsWithCoords.length > 0 && (
+              <div className="rounded-2xl overflow-hidden border border-border h-64 sm:h-80">
+                <LocationMap
+                  brand={brand}
+                  color="#60a5fa"
+                  selectedLocId={focusedLoc?.location_id ?? null}
+                  onLocSelect={setFocusedLoc}
+                />
               </div>
+            )}
 
-              {/* Map */}
-              <div className="flex-1 h-[280px] sm:h-[460px]">
-                <LocationMap brand={brand} color="#60a5fa" focusedLoc={focusedLoc} />
+            {/* Location tab pills — only shown when multiple locations */}
+            {brand.Locations.length > 1 && (
+              <div className="flex gap-2 mt-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                {brand.Locations.map((loc, i) => {
+                  const hasCoords = !!(loc.latitude && loc.longitude);
+                  const label = loc.city || loc.state || `Lokasi ${i + 1}`;
+                  const isActive = focusedLoc?.location_id === loc.location_id;
+                  return (
+                    <button
+                      key={loc.location_id}
+                      onClick={() => setFocusedLoc(loc)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 border transition-all ${
+                        isActive
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "bg-card border-border text-muted-foreground hover:border-primary/40"
+                      } ${!hasCoords ? "opacity-60" : ""}`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                          isActive ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
+            )}
+
+            {/* Selected location detail card */}
+            {focusedLoc && (
+              <div className="mt-3">
+                <LocationCard
+                  loc={focusedLoc}
+                  index={brand.Locations.findIndex((l) => l.location_id === focusedLoc.location_id)}
+                  total={totalLocs}
+                />
+              </div>
+            )}
           </section>
         )}
 
