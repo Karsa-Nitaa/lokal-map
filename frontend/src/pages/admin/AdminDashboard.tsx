@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, LogOut, MapPin, Package, Globe, ExternalLink, BarChart2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, MapPin, Package, Globe, ExternalLink, BarChart2, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,7 @@ export default function AdminDashboard() {
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] = useState("");
 
   const { data: brands = [], isLoading } = useQuery({
     queryKey: ["admin-brands"],
@@ -65,9 +66,13 @@ export default function AdminDashboard() {
   }, [brands]);
 
   const filteredBrands = useMemo(() => {
-    if (selectedCategory === "all") return brands;
-    return brands.filter((b) => b.brand_category === selectedCategory);
-  }, [brands, selectedCategory]);
+    const q = search.trim().toLowerCase();
+    return brands.filter((b) => {
+      const matchCat = selectedCategory === "all" || b.brand_category === selectedCategory;
+      const matchSearch = !q || (b.brand_name ?? "").toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [brands, selectedCategory, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredBrands.length / PAGE_SIZE));
   const paginatedBrands = filteredBrands.slice(
@@ -77,6 +82,11 @@ export default function AdminDashboard() {
 
   const handleCategoryChange = (cat: string) => {
     setSelectedCategory(cat);
+    setCurrentPage(1);
+  };
+
+  const handleSearch = (val: string) => {
+    setSearch(val);
     setCurrentPage(1);
   };
 
@@ -174,6 +184,28 @@ export default function AdminDashboard() {
             Tambah Brand
           </Button>
         </div>
+
+        {/* Search */}
+        {!isLoading && brands.length > 0 && (
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Cari nama brand..."
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-border bg-card focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            {search && (
+              <button
+                onClick={() => handleSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Category filter */}
         {!isLoading && availableCategories.length > 0 && (
