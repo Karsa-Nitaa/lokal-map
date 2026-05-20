@@ -294,12 +294,6 @@ const BrandDetailPage = () => {
     });
   }, [id]);
 
-  useEffect(() => {
-    if (!brand) return;
-    const first = brand.Locations.find((l) => l.latitude && l.longitude) ?? brand.Locations[0] ?? null;
-    setFocusedLoc(first);
-  }, [brand]);
-
   const { data: brand, isLoading } = useQuery({
     queryKey: ["brand", id],
     queryFn: () => fetchBrand(Number(id)),
@@ -312,6 +306,12 @@ const BrandDetailPage = () => {
     enabled: !!brand,
     staleTime: 5 * 60 * 1000,
   });
+
+  useEffect(() => {
+    if (!brand) return;
+    const first = brand.Locations.find((l) => l.latitude && l.longitude) ?? brand.Locations[0] ?? null;
+    setFocusedLoc(first);
+  }, [brand]);
 
   if (isLoading) {
     return (
