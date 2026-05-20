@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, MapPin, SlidersHorizontal, X, Lock } from "lucide-react";
+import { Search, MapPin, SlidersHorizontal, X, Lock, Map } from "lucide-react";
 import { CATEGORIES } from "@/data/brands";
 import type { Category } from "@/data/brands";
 import { supabase } from "@/lib/supabase";
@@ -9,7 +9,6 @@ import { MALAYSIAN_STATES } from "@/lib/database.types";
 import type { BrandWithDetails } from "@/lib/database.types";
 import { Helmet } from "react-helmet-async";
 import BrandCard from "@/components/BrandCard";
-import IndexMap from "@/components/IndexMap";
 import heroBanner from "@/assets/hero-banner.jpg";
 
 async function fetchAllBrands(): Promise<BrandWithDetails[]> {
@@ -144,7 +143,24 @@ const Index = () => {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
-        <IndexMap brands={allBrands} />
+        {/* Map CTA */}
+        <section className="mb-6">
+          <button
+            onClick={() => navigate("/map")}
+            className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all group shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+                <Map className="w-4.5 h-4.5 text-primary" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold">Lihat Peta Brand</p>
+                <p className="text-xs text-muted-foreground">Terokai semua lokasi fizikal pada peta interaktif</p>
+              </div>
+            </div>
+            <span className="text-muted-foreground text-sm group-hover:text-foreground transition-colors">→</span>
+          </button>
+        </section>
 
         {/* Category picker */}
         <section className="mb-8">

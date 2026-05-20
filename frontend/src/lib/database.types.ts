@@ -60,6 +60,7 @@ export interface DBOnline {
   additional_link: string | null;
   updated_at: string | null;
   brand_id: number | null;
+  phone_num: string | null;
 }
 
 export interface BrandWithDetails extends DBBrand {
@@ -92,7 +93,6 @@ export const MALAYSIAN_STATES = [
   "Pulau Pinang",
   "Selangor",
   "Kuala Lumpur",
-  "Putrajaya",
   "Terengganu",
   "Sabah",
   "Sarawak",

@@ -10,6 +10,7 @@ import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import BrandFormPage from "./pages/admin/BrandFormPage";
 import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
+import MapPage from "./pages/MapPage";
 import AdminGuard from "./components/AdminGuard";
 import { AuthProvider } from "./contexts/AuthContext";
 
@@ -25,6 +26,7 @@ const App = () => (
           <Routes>
             {/* ── Public routes ── */}
             <Route path="/" element={<Index />} />
+            <Route path="/map" element={<MapPage />} />
             <Route path="/brand/:id" element={<BrandDetailPage />} />
 
             {/* ── Admin routes (hidden from public nav) ── */}

@@ -106,6 +106,7 @@ const locationSchema = z.object({
 type LocationForm = z.infer<typeof locationSchema>;
 
 const onlineSchema = z.object({
+  phone_num: z.string().optional(),
   facebook_link: safeUrl.optional(),
   instagram_link: safeUrl.optional(),
   tiktok_link: safeUrl.optional(),
@@ -633,6 +634,7 @@ export default function BrandFormPage() {
   useEffect(() => {
     if (onlineRecord) {
       resetOnline({
+        phone_num: onlineRecord.phone_num ?? "",
         facebook_link: onlineRecord.facebook_link ?? "",
         instagram_link: onlineRecord.instagram_link ?? "",
         tiktok_link: onlineRecord.tiktok_link ?? "",
@@ -649,6 +651,7 @@ export default function BrandFormPage() {
     setOnlinePending(true);
     try {
       const payload = {
+        phone_num: form.phone_num || null,
         facebook_link: form.facebook_link || null,
         instagram_link: form.instagram_link || null,
         tiktok_link: form.tiktok_link || null,
@@ -947,6 +950,10 @@ export default function BrandFormPage() {
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
               Satu brand hanya boleh ada satu rekod online. Isi mana-mana link yang berkenaan.
             </div>
+
+            <Field label="No. Telefon / WhatsApp" hint="Untuk kedai online sahaja">
+              <Input {...registerOnline("phone_num")} placeholder="601x-xxxxxxxx" className="h-9 text-sm" />
+            </Field>
 
             <Field label="Website" error={onlineErrors.website_link?.message}>
               <Input {...registerOnline("website_link")} placeholder="https://www.brand.com" className="h-9 text-sm" />

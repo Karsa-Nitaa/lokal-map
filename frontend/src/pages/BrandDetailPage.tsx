@@ -531,9 +531,21 @@ const BrandDetailPage = () => {
         </section>
 
         {/* ── Online Platforms ──────────────────────────── */}
-        {hasOnline && onlineData && (
+        {(hasOnline || onlineData?.phone_num) && onlineData && (
           <section>
             <SectionTitle icon={<Globe className="w-4 h-4" />} title="Online" />
+            {onlineData.phone_num && (
+              <div className="mb-3">
+                <a
+                  href={`https://wa.me/${onlineData.phone_num.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-medium hover:opacity-90 transition-opacity"
+                >
+                  <Phone className="w-3.5 h-3.5" /> WhatsApp {onlineData.phone_num}
+                </a>
+              </div>
+            )}
             <div className="grid sm:grid-cols-2 gap-2">
               {onlineData.website_link && (
                 <SocialLink href={onlineData.website_link} label="Website" />
@@ -586,9 +598,10 @@ const BrandDetailPage = () => {
               title={`Lokasi Fizikal${totalLocs > 1 ? ` (${totalLocs})` : ""}`}
             />
 
-            <div className="flex gap-0 rounded-2xl overflow-hidden border border-border h-[460px]">
-              {/* Left: scrollable location list */}
-              <div className="w-[45%] overflow-y-auto bg-card border-r border-border flex flex-col gap-2 p-3">
+            {/* Mobile: stacked. Desktop: side-by-side */}
+            <div className="flex flex-col sm:flex-row gap-0 rounded-2xl overflow-hidden border border-border">
+              {/* Location list */}
+              <div className="sm:w-[45%] overflow-y-auto bg-card sm:border-r border-border border-b sm:border-b-0 flex flex-col gap-2 p-3 max-h-64 sm:max-h-none sm:h-[460px]">
                 {brand.Locations.map((loc, i) => (
                   <button
                     key={loc.location_id}
@@ -604,8 +617,8 @@ const BrandDetailPage = () => {
                 ))}
               </div>
 
-              {/* Right: map */}
-              <div className="flex-1 h-full">
+              {/* Map */}
+              <div className="flex-1 h-[280px] sm:h-[460px]">
                 <LocationMap brand={brand} color="#60a5fa" focusedLoc={focusedLoc} />
               </div>
             </div>
